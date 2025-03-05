@@ -7,10 +7,9 @@ import {
   products,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
-import { desc, eq, like, or, and, SQL, asc } from "drizzle-orm";
+import { desc, eq, like, or, and, sql, asc } from "drizzle-orm";
 import { z } from "zod";
 import { slugify } from "@/lib/utils";
-import { auth } from "@/auth";
 
 // Schema de validação para criação/atualização de planos
 const planSchema = z.object({
@@ -36,101 +35,91 @@ const planSchema = z.object({
 // GET /api/plans - Listar todos os planos
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    // Verificar autenticação para planos privados
+    const session = await getSession();
+
+    // Obter parâmetros de consulta para filtragem e paginação
+    const searchParams = request.nextUrl.searchParams;
+    const search = searchParams.get("search");
     const limit = searchParams.get("limit")
       ? parseInt(searchParams.get("limit")!)
       : 10;
-    const page = searchParams.get("page")
-      ? parseInt(searchParams.get("page")!)
-      : 1;
-    const offset = (page - 1) * limit;
+    const offset = searchParams.get("offset")
+      ? parseInt(searchParams.get("offset")!)
+      : 0;
+    const sort = searchParams.get("sort") || "name";
+    const order = searchParams.get("order") === "desc" ? desc : asc;
 
-    // Verificar se é uma solicitação para detalhes completos
-    const fullDetails = searchParams.get("fullDetails") === "true";
+    // Buscar planos de assinatura
+    const plans = await db.query.subscriptionPlans.findMany({
+      limit,
+      offset,
+      orderBy:
+        sort === "name"
+          ? order(subscriptionPlans.name)
+          : sort === "price"
+          ? order(subscriptionPlans.price)
+          : order(subscriptionPlans.createdAt),
+      where: search
+        ? or(
+            like(subscriptionPlans.name, `%${search}%`),
+            like(subscriptionPlans.description || "", `%${search}%`)
+          )
+        : undefined,
+    });
 
-    if (fullDetails) {
-      // Buscar todos os planos com detalhes completos
-      const plans = await db.query.subscriptionPlans.findMany({
-        orderBy: (plans, { asc }) => [asc(plans.price)],
-      });
+    // Se o usuário estiver autenticado, adicionar informações adicionais
+    if (session) {
+      // Contar total de planos para paginação
+      const totalPlansCountResult = await db.execute(
+        sql`SELECT COUNT(*) FROM subscription_plans`
+      );
+      const totalPlans = Number(totalPlansCountResult[0]?.count || 0);
 
-      // Para cada plano, buscar os itens fixos e regras de customização
+      // Obter itens fixos e regras de personalização para cada plano
       const plansWithDetails = await Promise.all(
         plans.map(async (plan) => {
-          // Buscar os itens fixos do plano
-          const fixedItems = await db
-            .select()
-            .from(planFixedItems)
-            .where(eq(planFixedItems.planId, plan.id));
+          // Obter itens fixos
+          const fixedItems = await db.query.planFixedItems.findMany({
+            where: eq(planFixedItems.planId, plan.id),
+            with: {
+              product: true,
+            },
+          });
 
-          // Buscar os produtos dos itens fixos
-          const fixedItemsWithProducts = await Promise.all(
-            fixedItems.map(async (item) => {
-              const product = await db.query.products.findFirst({
-                where: eq(products.id, item.productId),
-              });
-              return {
-                ...item,
-                product,
-              };
-            })
-          );
+          // Obter regras de personalização
+          const customizableRules =
+            await db.query.planCustomizableItems.findMany({
+              where: eq(planCustomizableItems.planId, plan.id),
+            });
 
-          // Buscar as regras de customização do plano
-          const customizableRules = await db
-            .select()
-            .from(planCustomizableItems)
-            .where(eq(planCustomizableItems.planId, plan.id));
-
-          // Retornar o plano com os itens fixos e regras de customização
           return {
             ...plan,
-            fixedItems: fixedItemsWithProducts,
+            fixedItems,
             customizableRules,
           };
         })
       );
 
-      return NextResponse.json(plansWithDetails);
-    } else {
-      // Buscar planos de assinatura simplificados
-      const plans = await db
-        .select({
-          id: subscriptionPlans.id,
-          name: subscriptionPlans.name,
-          description: subscriptionPlans.description,
-          slug: subscriptionPlans.slug,
-          price: subscriptionPlans.price,
-          imageUrl: subscriptionPlans.imageUrl,
-          createdAt: subscriptionPlans.createdAt,
-        })
-        .from(subscriptionPlans)
-        .orderBy(desc(subscriptionPlans.createdAt))
-        .limit(limit)
-        .offset(offset);
-
-      // Contar total de planos para paginação
-      const totalPlansCount = await db
-        .select({ count: SQL`count(*)` })
-        .from(subscriptionPlans);
-
-      const totalPlans = Number(totalPlansCount[0]?.count || 0);
-      const totalPages = Math.ceil(totalPlans / limit);
-
       return NextResponse.json({
-        plans,
-        pagination: {
-          total: totalPlans,
-          totalPages,
-          currentPage: page,
-          limit,
-        },
+        plans: plansWithDetails,
+        total: totalPlans,
+        limit,
+        offset,
       });
     }
+
+    // Para usuários não autenticados, retornar apenas os planos básicos
+    return NextResponse.json({
+      plans,
+      total: plans.length,
+      limit,
+      offset,
+    });
   } catch (error) {
     console.error("Erro ao buscar planos:", error);
     return NextResponse.json(
-      { error: "Erro ao buscar planos de assinatura" },
+      { error: "Erro ao buscar planos" },
       { status: 500 }
     );
   }
@@ -145,13 +134,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    // Obter dados do corpo da requisição
     const body = await request.json();
 
-    // Validar os dados recebidos
-    const validatedData = planSchema.parse(body);
+    // Validar dados
+    const validationResult = planSchema.safeParse(body);
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: validationResult.error.errors },
+        { status: 400 }
+      );
+    }
 
-    // Criar o slug a partir do nome
-    const slug = slugify(validatedData.name);
+    const {
+      name,
+      description,
+      price,
+      imageUrl,
+      fixedItems,
+      customizableRules,
+    } = validationResult.data;
+
+    // Gerar slug a partir do nome
+    const slug = slugify(name);
 
     // Verificar se já existe um plano com o mesmo slug
     const existingPlan = await db.query.subscriptionPlans.findFirst({
@@ -165,28 +170,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Inserir o plano no banco de dados
+    // Criar o plano
     const [newPlan] = await db
       .insert(subscriptionPlans)
       .values({
-        name: validatedData.name,
-        description: validatedData.description || null,
+        name,
+        description,
         slug,
-        price: validatedData.price.toString(),
-        imageUrl: validatedData.imageUrl || null,
+        price: price.toString(),
+        imageUrl,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning();
 
-    if (!newPlan) {
-      throw new Error("Falha ao criar o plano");
-    }
-
-    // Inserir os itens fixos do plano
-    if (validatedData.fixedItems.length > 0) {
+    // Adicionar itens fixos
+    if (fixedItems.length > 0) {
       await db.insert(planFixedItems).values(
-        validatedData.fixedItems.map((item) => ({
+        fixedItems.map((item) => ({
           planId: newPlan.id,
           productId: item.productId,
           quantity: item.quantity,
@@ -196,10 +197,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Inserir as regras de customização do plano
-    if (validatedData.customizableRules.length > 0) {
+    // Adicionar regras de personalização
+    if (customizableRules.length > 0) {
       await db.insert(planCustomizableItems).values(
-        validatedData.customizableRules.map((rule) => ({
+        customizableRules.map((rule) => ({
           planId: newPlan.id,
           productType: rule.productType,
           minQuantity: rule.minQuantity,
@@ -210,17 +211,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(newPlan, { status: 201 });
+    return NextResponse.json(newPlan);
   } catch (error) {
     console.error("Erro ao criar plano:", error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Dados inválidos", details: error.errors },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json({ error: "Erro ao criar plano" }, { status: 500 });
   }
 }

@@ -13,6 +13,7 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute = pathname.startsWith(adminRoutes);
   const isCustomerRoute = pathname.startsWith(customerRoutes);
 
+  // Redirect to sign-in if trying to access protected routes without a session
   if (isProtectedRoute && !sessionCookie) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
@@ -21,35 +22,56 @@ export async function middleware(request: NextRequest) {
 
   if (sessionCookie) {
     try {
-      const parsed = await verifyToken(sessionCookie.value);
-      const expiresInOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const session = await verifyToken(sessionCookie.value);
+
+      // If session is invalid or expired, clear it and redirect if on protected route
+      if (!session) {
+        res.cookies.delete("session");
+        if (isProtectedRoute) {
+          return NextResponse.redirect(new URL("/sign-in", request.url));
+        }
+        return res;
+      }
 
       // Role-based access control
-      if (isAdminRoute && parsed.user.role !== "admin") {
+      if (isAdminRoute && session.user.role !== "admin") {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
 
       if (
         isCustomerRoute &&
-        parsed.user.role !== "member" &&
-        parsed.user.role !== "admin"
+        session.user.role !== "member" &&
+        session.user.role !== "admin"
       ) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
 
-      res.cookies.set({
-        name: "session",
-        value: await signToken({
-          ...parsed,
-          expires: expiresInOneDay.toISOString(),
-        }),
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax",
-        expires: expiresInOneDay,
-      });
+      // If user is admin and accessing the main dashboard, redirect to admin dashboard
+      if (pathname === "/dashboard" && session.user.role === "admin") {
+        return NextResponse.redirect(new URL("/dashboard/admin", request.url));
+      }
+
+      // Refresh the session if it's about to expire (less than 4 hours left)
+      const expiresAt = new Date(session.expires).getTime();
+      const now = Date.now();
+      const fourHoursInMs = 4 * 60 * 60 * 1000;
+
+      if (expiresAt - now < fourHoursInMs) {
+        const expiresInOneDay = new Date(now + 24 * 60 * 60 * 1000);
+
+        res.cookies.set({
+          name: "session",
+          value: await signToken({
+            ...session,
+            expires: expiresInOneDay.toISOString(),
+          }),
+          httpOnly: true,
+          expires: expiresInOneDay,
+          path: "/",
+        });
+      }
     } catch (error) {
-      console.error("Error updating session:", error);
+      console.error("Error processing session:", error);
       res.cookies.delete("session");
       if (isProtectedRoute) {
         return NextResponse.redirect(new URL("/sign-in", request.url));

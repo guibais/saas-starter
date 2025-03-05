@@ -1,13 +1,17 @@
 import { compare, hash } from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
 import { NewUser, User } from "@/lib/db/schema";
+import { cookies } from "next/headers";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
-const key = new TextEncoder().encode(process.env.AUTH_SECRET);
-const SALT_ROUNDS = 10;
+const key = new TextEncoder().encode(
+  process.env.AUTH_SECRET || "fallback-secret-key-for-development-only"
+);
 
 export async function hashPassword(password: string) {
-  return hash(password, SALT_ROUNDS);
+  return hash(password, 10);
 }
 
 export async function comparePasswords(
@@ -17,46 +21,156 @@ export async function comparePasswords(
   return compare(plainTextPassword, hashedPassword);
 }
 
-type SessionData = {
+export type SessionData = {
   user: { id: number; role?: string };
   expires: string;
+  isCustomer?: boolean;
 };
 
+// Token operations (can be used on both client and server)
 export async function signToken(payload: SessionData) {
-  return await new SignJWT(payload)
+  const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("1 day from now")
+    .setExpirationTime("1d")
     .sign(key);
+
+  return token;
 }
 
 export async function verifyToken(input: string) {
-  const { payload } = await jwtVerify(input, key, {
-    algorithms: ["HS256"],
-  });
-  return payload as SessionData;
+  try {
+    const { payload } = await jwtVerify(input, key);
+    return payload as SessionData;
+  } catch (error) {
+    return null;
+  }
 }
 
+// Server-side session operations (for backward compatibility)
 export async function getSession() {
-  const session = (await cookies()).get("session")?.value;
-  if (!session) return null;
-  return await verifyToken(session);
+  try {
+    // Get the session cookie from request headers
+    const cookieHeader = cookies().toString();
+    if (!cookieHeader) return null;
+
+    // Parse the cookie header to find the session cookie
+    const cookiePairs = cookieHeader.split(";");
+    let sessionToken = null;
+
+    for (const pair of cookiePairs) {
+      const [name, value] = pair.trim().split("=");
+      if (name === "session") {
+        sessionToken = decodeURIComponent(value);
+        break;
+      }
+    }
+
+    if (!sessionToken) {
+      return null;
+    }
+
+    // Verify the token
+    const session = await verifyToken(sessionToken);
+    if (!session) {
+      return null;
+    }
+
+    return session;
+  } catch (error) {
+    console.error("Error getting session:", error);
+    return null;
+  }
 }
 
-export async function setSession(user: User | NewUser) {
-  const expiresInOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
+// Client-side session operations
+export async function login(email: string, password: string) {
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Login failed");
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function register(userData: Partial<User>) {
+  try {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(userData),
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Registration failed");
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function logout() {
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function getUser() {
+  try {
+    const response = await fetch("/api/auth/user", {
+      credentials: "include",
+    });
+
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+export async function setSession(user: User) {
   const session: SessionData = {
-    user: {
-      id: user.id!,
-      role: user.role,
-    },
-    expires: expiresInOneDay.toISOString(),
+    user: { id: user.id, role: user.role },
+    expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 1 day from now
   };
-  const encryptedSession = await signToken(session);
-  (await cookies()).set("session", encryptedSession, {
-    expires: expiresInOneDay,
+
+  const token = await signToken(session);
+
+  // Set the session cookie
+  (await cookies()).set({
+    name: "session",
+    value: token,
     httpOnly: true,
-    secure: true,
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 60 * 60 * 24, // 1 day in seconds
     sameSite: "lax",
   });
+
+  return session;
 }

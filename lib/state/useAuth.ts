@@ -1,7 +1,11 @@
 import { useEffect } from "react";
 import { useAuthStore } from "./authStore";
-import { getSession } from "@/lib/auth/session";
 import { User } from "@/lib/db/schema";
+import {
+  login as loginApi,
+  logout as logoutApi,
+  getUser as getUserApi,
+} from "@/lib/auth/session";
 
 export function useAuth() {
   const {
@@ -13,40 +17,41 @@ export function useAuth() {
     setIsAuthenticated,
     setIsLoading,
     setError,
-    logout,
+    logout: clearAuthState,
   } = useAuthStore();
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
         setIsLoading(true);
-        const session = await getSession();
 
-        if (session && session.user) {
-          // Fetch user data from API
-          const response = await fetch(`/api/users/${session.user.id}`);
+        // Fetch user data from API
+        const response = await fetch("/api/auth/user", {
+          credentials: "include", // Important for sending cookies
+        });
 
-          if (response.ok) {
-            const userData = await response.json();
+        if (response.ok) {
+          const userData = await response.json();
+          if (userData) {
             setUser(userData);
             setIsAuthenticated(true);
           } else {
-            setError("Falha ao carregar dados do usuário");
-            logout();
+            clearAuthState();
           }
         } else {
-          logout();
+          clearAuthState();
         }
       } catch (err) {
+        console.error("Auth error:", err);
         setError("Erro de autenticação");
-        logout();
+        clearAuthState();
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUser();
-  }, [setUser, setIsAuthenticated, setIsLoading, setError, logout]);
+  }, [setUser, setIsAuthenticated, setIsLoading, setError, clearAuthState]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -59,6 +64,7 @@ export function useAuth() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
+        credentials: "include", // Important for receiving cookies
       });
 
       if (response.ok) {
@@ -72,6 +78,7 @@ export function useAuth() {
         return false;
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError("Erro ao fazer login");
       return false;
     } finally {
@@ -90,6 +97,7 @@ export function useAuth() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(userData),
+        credentials: "include", // Important for receiving cookies
       });
 
       if (response.ok) {
@@ -103,6 +111,7 @@ export function useAuth() {
         return false;
       }
     } catch (err) {
+      console.error("Register error:", err);
       setError("Erro ao registrar");
       return false;
     } finally {
@@ -116,11 +125,13 @@ export function useAuth() {
 
       await fetch("/api/auth/logout", {
         method: "POST",
+        credentials: "include", // Important for sending cookies
       });
 
-      logout();
+      clearAuthState();
       return true;
     } catch (err) {
+      console.error("Logout error:", err);
       setError("Erro ao fazer logout");
       return false;
     } finally {
@@ -144,6 +155,7 @@ export function useAuth() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(userData),
+        credentials: "include", // Important for sending cookies
       });
 
       if (response.ok) {
@@ -156,6 +168,7 @@ export function useAuth() {
         return false;
       }
     } catch (err) {
+      console.error("Update profile error:", err);
       setError("Erro ao atualizar perfil");
       return false;
     } finally {

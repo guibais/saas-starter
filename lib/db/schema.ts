@@ -26,6 +26,20 @@ export const users = pgTable("users", {
   deletedAt: timestamp("deleted_at"),
 });
 
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  address: text("address"),
+  phone: varchar("phone", { length: 20 }),
+  deliveryInstructions: text("delivery_instructions"),
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+});
+
 export const teams = pgTable("teams", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -142,9 +156,9 @@ export const planCustomizableItems = pgTable("plan_customizable_items", {
 
 export const userSubscriptions = pgTable("user_subscriptions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id")
+  customerId: integer("customer_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => customers.id),
   planId: integer("plan_id")
     .notNull()
     .references(() => subscriptionPlans.id),
@@ -172,9 +186,9 @@ export const subscriptionItems = pgTable("subscription_items", {
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id")
+  customerId: integer("customer_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => customers.id),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   paymentStatus: varchar("payment_status", { length: 20 })
@@ -236,6 +250,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   carts: many(carts),
 }));
 
+export const customersRelations = relations(customers, ({ many }) => ({
+  orders: many(orders),
+  userSubscriptions: many(userSubscriptions),
+}));
+
 export const invitationsRelations = relations(invitations, ({ one }) => ({
   team: one(teams, {
     fields: [invitations.teamId],
@@ -289,9 +308,9 @@ export const subscriptionPlansRelations = relations(
 export const userSubscriptionsRelations = relations(
   userSubscriptions,
   ({ one, many }) => ({
-    user: one(users, {
-      fields: [userSubscriptions.userId],
-      references: [users.id],
+    customer: one(customers, {
+      fields: [userSubscriptions.customerId],
+      references: [customers.id],
     }),
     plan: one(subscriptionPlans, {
       fields: [userSubscriptions.planId],
@@ -302,9 +321,9 @@ export const userSubscriptionsRelations = relations(
 );
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
-  user: one(users, {
-    fields: [orders.userId],
-    references: [users.id],
+  customer: one(customers, {
+    fields: [orders.customerId],
+    references: [customers.id],
   }),
   orderItems: many(orderItems),
 }));
@@ -319,6 +338,8 @@ export const cartsRelations = relations(carts, ({ one, many }) => ({
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
 export type Team = typeof teams.$inferSelect;
 export type NewTeam = typeof teams.$inferInsert;
 export type TeamMember = typeof teamMembers.$inferSelect;
