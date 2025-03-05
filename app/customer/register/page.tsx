@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CircleIcon, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import Image from "next/image";
 
 export default function CustomerRegisterPage() {
   const router = useRouter();
@@ -61,15 +62,21 @@ export default function CustomerRegisterPage() {
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <CircleIcon className="h-12 w-12 text-orange-500" />
+        <div className="mb-8 text-center">
+          <Image
+            src="/images/logo.jpeg"
+            alt="Tudo Fresco Logo"
+            width={48}
+            height={48}
+            className="mx-auto h-12 w-12"
+          />
+          <h2 className="mt-4 text-2xl font-bold tracking-tight">
+            Crie sua conta
+          </h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Registre-se para começar a fazer pedidos
+          </p>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create Customer Account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Sign up to start your subscription
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

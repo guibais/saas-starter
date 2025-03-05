@@ -56,7 +56,7 @@ export default async function HomePage() {
       <section className="relative w-full bg-gradient-to-r from-green-900 to-green-700 py-20 px-4 md:px-6 lg:px-8">
         <div className="absolute inset-0 opacity-20">
           <Image
-            src="/images/fruits-pattern.jpg"
+            src="/images/fruits-pattern.svg"
             alt="Padrão de frutas"
             fill
             className="object-cover"
@@ -84,7 +84,7 @@ export default async function HomePage() {
           </div>
           <div className="flex-1 relative h-[300px] md:h-[400px] w-full rounded-lg overflow-hidden">
             <Image
-              src="/images/hero-fruits.jpg"
+              src="/images/hero-fruits.svg"
               alt="Seleção de frutas gourmet"
               fill
               className="object-cover"

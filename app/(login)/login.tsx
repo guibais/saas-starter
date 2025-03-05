@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { CircleIcon, Loader2 } from "lucide-react";
 import { signIn, signUp } from "./actions";
 import { ActionState } from "@/lib/auth/middleware";
+import Image from "next/image";
 
 export function Login({ mode = "signin" }: { mode?: "signin" | "signup" }) {
   const searchParams = useSearchParams();
@@ -22,17 +23,21 @@ export function Login({ mode = "signin" }: { mode?: "signin" | "signup" }) {
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <CircleIcon className="h-12 w-12 text-orange-500" />
+        <div className="mb-8 text-center">
+          <Image
+            src="/images/logo.jpeg"
+            alt="Tudo Fresco Logo"
+            width={48}
+            height={48}
+            className="mx-auto h-12 w-12"
+          />
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">
+            Login Administrativo
+          </h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Acesse o painel de administração
+          </p>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          {mode === "signin" ? "Admin Sign In" : "Admin Sign Up"}
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          {mode === "signin"
-            ? "Admin access only"
-            : "New admin accounts cannot be created"}
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

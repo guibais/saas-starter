@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  CircleIcon,
   Home,
   LogOut,
   User,
@@ -30,6 +29,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import Image from "next/image";
 
 export function CustomerHeader({ user }: { user: any }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -61,10 +61,16 @@ export function CustomerHeader({ user }: { user: any }) {
     <header className="border-b border-gray-200 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
         <Link href="/" className="flex items-center">
-          <CircleIcon className="h-6 w-6 text-green-500" />
-          <span className="ml-2 text-xl font-semibold text-gray-900">
-            Tudo Fresco
-          </span>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/images/logo.jpeg"
+              alt="Tudo Fresco Logo"
+              width={24}
+              height={24}
+              className="h-6 w-6"
+            />
+            <span className="text-xl font-semibold">Cliente</span>
+          </div>
         </Link>
         <div className="hidden md:flex items-center space-x-6">
           <Link

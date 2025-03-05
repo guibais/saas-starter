@@ -34,6 +34,7 @@ import {
 import { ArrowLeft, Loader2, Trash, Plus, Minus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { ImageUpload } from "@/components/ui/image-upload";
+import React from "react";
 
 interface FixedItem {
   id?: number;
@@ -260,6 +261,9 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
       }
 
       // Preparar dados para envio
+      // Nota: O formato para atualização (PATCH) é diferente do formato para criação (POST)
+      // Na atualização, customizableRules deve ser um objeto com normal e exotic
+      // Na criação, customizableRules deve ser um array de objetos com productType, minQuantity e maxQuantity
       const payload = {
         name: formData.name,
         description: formData.description,
@@ -269,18 +273,16 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
           productId: item.productId,
           quantity: item.quantity,
         })),
-        customizableRules: [
-          {
-            productType: "normal",
-            minQuantity: formData.customizableRules.normal.min,
-            maxQuantity: formData.customizableRules.normal.max,
+        customizableRules: {
+          normal: {
+            min: formData.customizableRules.normal.min,
+            max: formData.customizableRules.normal.max,
           },
-          {
-            productType: "exotic",
-            minQuantity: formData.customizableRules.exotic.min,
-            maxQuantity: formData.customizableRules.exotic.max,
+          exotic: {
+            min: formData.customizableRules.exotic.min,
+            max: formData.customizableRules.exotic.max,
           },
-        ],
+        },
       };
 
       // Enviar para a API

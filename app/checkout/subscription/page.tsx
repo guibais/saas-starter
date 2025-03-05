@@ -18,51 +18,29 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Check, Loader2, ShoppingCart } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Loader2,
+  ShoppingCart,
+  CreditCard,
+  Shield,
+  Clock,
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useSubscriptionStore } from "@/lib/state/subscriptionStore";
+import { Checkbox } from "@/components/ui/checkbox";
 
-// Schema de validação para o formulário
-const checkoutFormSchema = z.object({
-  name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
-  email: z.string().email("Email inválido"),
-  phone: z.string().min(10, "Telefone inválido"),
-  address: z.string().min(10, "Endereço deve ser completo"),
-  password: z
-    .string()
-    .min(6, "Senha deve ter pelo menos 6 caracteres")
-    .optional(),
-  deliveryInstructions: z.string().optional(),
-  // Campos de cartão de crédito
-  cardNumber: z
-    .string()
-    .min(13, "Número do cartão inválido")
-    .max(19, "Número do cartão inválido"),
-  cardName: z
-    .string()
-    .min(3, "Nome no cartão deve ter pelo menos 3 caracteres"),
-  cardExpiry: z
-    .string()
-    .regex(
-      /^(0[1-9]|1[0-2])\/([0-9]{2})$/,
-      "Data de validade inválida (MM/AA)"
-    ),
-  cardCvc: z.string().min(3, "CVC inválido").max(4, "CVC inválido"),
-});
-
-// Função para criar o esquema de validação com base no estado de autenticação
-const createValidationSchema = (isAuthenticated: boolean) => {
-  return isAuthenticated
-    ? checkoutFormSchema
-    : checkoutFormSchema.refine((data) => !!data.password, {
-        message: "Senha é obrigatória para criar uma conta",
-        path: ["password"],
-      });
-};
-
-type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
+// Stripe será instalado posteriormente. Por enquanto, vamos usar uma abordagem mais simples
+// para evitar erros de compilação
 
 interface FixedItem {
   id: number;
@@ -98,12 +76,104 @@ interface CustomizableItem {
   quantity: number;
 }
 
+interface UserData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  deliveryInstructions?: string;
+}
+
+// Schema de validação para o formulário
+const checkoutFormSchema = z.object({
+  name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().min(10, "Telefone inválido"),
+  address: z.string().min(10, "Endereço deve ser completo"),
+  password: z
+    .string()
+    .min(6, "Senha deve ter pelo menos 6 caracteres")
+    .optional(),
+  deliveryInstructions: z.string().optional(),
+  // Campos de cartão de crédito
+  cardNumber: z
+    .string()
+    .min(13, "Número do cartão inválido")
+    .max(19, "Número do cartão inválido"),
+  cardName: z
+    .string()
+    .min(3, "Nome no cartão deve ter pelo menos 3 caracteres"),
+  cardExpiry: z
+    .string()
+    .regex(
+      /^(0[1-9]|1[0-2])\/([0-9]{2})$/,
+      "Data de validade inválida (MM/AA)"
+    ),
+  cardCvc: z.string().min(3, "CVC inválido").max(4, "CVC inválido"),
+  savePaymentMethod: z.boolean().default(true),
+});
+
+// Função para criar o esquema de validação com base no estado de autenticação
+const createValidationSchema = (isAuthenticated: boolean) => {
+  return isAuthenticated
+    ? checkoutFormSchema.omit({ password: true })
+    : checkoutFormSchema.refine((data) => !!data.password, {
+        message: "Senha é obrigatória para criar uma conta",
+        path: ["password"],
+      });
+};
+
+type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
+
+// Adicionando formatadores aos campos de cartão de crédito
+const formatCardNumber = (value: string) => {
+  if (!value) return "";
+
+  // Remover tudo que não for número
+  const numbers = value.replace(/[^\d]/g, "");
+
+  // Limitar a 16 dígitos
+  const trimmed = numbers.slice(0, 16);
+
+  // Adicionar espaços a cada 4 dígitos
+  const formatted = trimmed.replace(/(\d{4})(?=\d)/g, "$1 ");
+
+  return formatted;
+};
+
+const formatExpiryDate = (value: string) => {
+  if (!value) return "";
+
+  // Remover tudo que não for número
+  const numbers = value.replace(/[^\d]/g, "");
+
+  // Limitar a 4 dígitos
+  const trimmed = numbers.slice(0, 4);
+
+  // Adicionar barra após os primeiros 2 dígitos
+  if (trimmed.length > 2) {
+    return `${trimmed.slice(0, 2)}/${trimmed.slice(2)}`;
+  }
+
+  return trimmed;
+};
+
+const formatCVC = (value: string) => {
+  if (!value) return "";
+
+  // Remover tudo que não for número
+  const numbers = value.replace(/[^\d]/g, "");
+
+  // Limitar a 4 dígitos (para Amex que tem CVC de 4 dígitos)
+  return numbers.slice(0, 4);
+};
+
 export default function SubscriptionCheckoutPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<{
@@ -114,7 +184,8 @@ export default function SubscriptionCheckoutPage() {
   } | null>(null);
 
   // Get customizable items from store
-  const { customizableItems, getCustomizationTotal } = useSubscriptionStore();
+  const { customizableItems, getCustomizationTotal, clearCustomization } =
+    useSubscriptionStore();
 
   // Log customizable items for debugging
   useEffect(() => {
@@ -135,6 +206,7 @@ export default function SubscriptionCheckoutPage() {
       cardName: "",
       cardExpiry: "",
       cardCvc: "",
+      savePaymentMethod: true,
     },
     mode: "onChange", // Validar ao alterar os campos
   });
@@ -146,6 +218,25 @@ export default function SubscriptionCheckoutPage() {
         // Get plan ID from query parameter
         const searchParams = new URLSearchParams(window.location.search);
         const planSlug = searchParams.get("plan");
+        const success = searchParams.get("success");
+
+        if (success === "true") {
+          setSuccessMessage({
+            title: "Assinatura realizada com sucesso!",
+            message:
+              "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
+            primaryAction: {
+              label: "Ver minhas assinaturas",
+              href: "/customer/dashboard/subscription",
+            },
+            secondaryAction: {
+              label: "Voltar para a página inicial",
+              href: "/",
+            },
+          });
+          setIsLoading(false);
+          return;
+        }
 
         if (!planSlug) {
           setError("Nenhum plano selecionado");
@@ -162,6 +253,10 @@ export default function SubscriptionCheckoutPage() {
         const data = await response.json();
         setSelectedPlan(data);
         console.log("Plano selecionado carregado:", data);
+
+        // Verificar autenticação
+        await checkAuth();
+
         setIsLoading(false);
       } catch (error) {
         console.error("Erro ao carregar plano:", error);
@@ -174,39 +269,40 @@ export default function SubscriptionCheckoutPage() {
   }, []);
 
   // Check if user is authenticated and fill form with user data
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch("/api/customer/check-auth");
-        const data = await response.json();
+  const checkAuth = async () => {
+    try {
+      const response = await fetch("/api/customer/check-auth");
+      const data = await response.json();
 
-        console.log("Verificação de autenticação:", data);
+      console.log("Verificação de autenticação:", data);
 
-        if (data.authenticated) {
-          const userData = data.user;
-          setIsAuthenticated(true);
-          setUserData(userData);
+      if (data.authenticated) {
+        const userDetails = data.user;
+        setIsAuthenticated(true);
+        setUserData(userDetails);
 
-          // Fill form with user data
-          form.setValue("name", userData.name || "");
-          form.setValue("email", userData.email || "");
-          form.setValue("phone", userData.phone || "");
-          form.setValue("address", userData.address || "");
-        } else {
-          setIsAuthenticated(false);
-          setUserData(null);
-        }
-      } catch (error) {
-        console.error("Erro ao verificar autenticação:", error);
+        // Fill form with user data
+        form.setValue("name", userDetails.name || "");
+        form.setValue("email", userDetails.email || "");
+        form.setValue("phone", userDetails.phone || "");
+        form.setValue("address", userDetails.address || "");
+        form.setValue(
+          "deliveryInstructions",
+          userDetails.deliveryInstructions || ""
+        );
+      } else {
         setIsAuthenticated(false);
         setUserData(null);
       }
-    };
 
-    if (selectedPlan) {
-      checkAuth();
+      return data.authenticated;
+    } catch (error) {
+      console.error("Erro ao verificar autenticação:", error);
+      setIsAuthenticated(false);
+      setUserData(null);
+      return false;
     }
-  }, [selectedPlan, form]);
+  };
 
   // Calculate total price (plan price + customizable items)
   const calculateTotal = useMemo(() => {
@@ -266,6 +362,7 @@ export default function SubscriptionCheckoutPage() {
           cardName: data.cardName,
           cardExpiry: data.cardExpiry,
           cardCvc: data.cardCvc,
+          savePaymentMethod: data.savePaymentMethod,
         },
         createAccount: !isAuthenticated,
       };
@@ -316,7 +413,7 @@ export default function SubscriptionCheckoutPage() {
         // Handle successful checkout
         if (responseData.success) {
           // Clear customization
-          useSubscriptionStore.getState().clearCustomization();
+          clearCustomization();
 
           // Show success message
           setSuccessMessage({
@@ -350,16 +447,17 @@ export default function SubscriptionCheckoutPage() {
           ? error.message
           : "Ocorreu um erro ao processar sua assinatura"
       );
+      setIsSubmitting(false);
     }
   };
 
   // Show loading state
   if (isLoading) {
     return (
-      <div className="container max-w-5xl py-8 flex justify-center items-center min-h-[60vh]">
+      <div className="container max-w-5xl py-12 flex justify-center items-center min-h-[60vh]">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Carregando informações do plano...</p>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-green-600" />
+          <p className="text-gray-600">Preparando seu checkout...</p>
         </div>
       </div>
     );
@@ -368,14 +466,17 @@ export default function SubscriptionCheckoutPage() {
   // Show success message
   if (successMessage) {
     return (
-      <div className="container max-w-5xl py-8">
-        <Card className="p-8 text-center">
-          <Check className="h-16 w-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">{successMessage.title}</h2>
-          <p className="mb-6 text-muted-foreground">{successMessage.message}</p>
+      <div className="container max-w-5xl py-12">
+        <Card className="p-8 text-center border-green-200 shadow-md">
+          <Check className="h-16 w-16 text-green-500 mx-auto mb-6" />
+          <h2 className="text-2xl font-bold mb-3 text-green-800">
+            {successMessage.title}
+          </h2>
+          <p className="mb-8 text-gray-600 text-lg">{successMessage.message}</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
+              className="bg-green-600 hover:bg-green-700"
               onClick={() => router.push(successMessage.primaryAction.href)}
             >
               {successMessage.primaryAction.label}
@@ -383,6 +484,7 @@ export default function SubscriptionCheckoutPage() {
             <Button
               size="lg"
               variant="outline"
+              className="border-green-200"
               onClick={() => router.push(successMessage.secondaryAction.href)}
             >
               {successMessage.secondaryAction.label}
@@ -396,7 +498,7 @@ export default function SubscriptionCheckoutPage() {
   // Show error if no plan selected
   if (!selectedPlan) {
     return (
-      <div className="container max-w-5xl py-8">
+      <div className="container max-w-5xl py-12">
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
@@ -408,11 +510,16 @@ export default function SubscriptionCheckoutPage() {
   }
 
   return (
-    <div className="container max-w-5xl py-8">
-      <h1 className="text-3xl font-bold mb-6">Finalizar Assinatura</h1>
+    <div className="container max-w-6xl py-12">
+      <h1 className="text-3xl font-bold mb-2 text-green-800">
+        Finalizar Assinatura
+      </h1>
+      <p className="text-gray-600 mb-8">
+        Complete o checkout para iniciar sua assinatura de frutas frescas
+      </p>
 
       {error && (
-        <Alert variant="destructive" className="mb-6">
+        <Alert variant="destructive" className="mb-8">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -422,52 +529,19 @@ export default function SubscriptionCheckoutPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <Form {...form}>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault(); // Prevenir o comportamento padrão
-                console.log("Form submit event triggered");
-                console.log("Form validation state:", form.formState);
-                console.log("Form errors:", form.formState.errors);
-                console.log("Form values:", form.getValues());
-
-                // Verificar se o formulário é válido
-                const isValid = form.formState.isValid;
-                console.log("Formulário é válido?", isValid);
-
-                if (isValid) {
-                  console.log("Formulário válido, prosseguindo com o envio");
-                  form.handleSubmit(onSubmit)(e);
-                } else {
-                  console.error("Formulário inválido. Corrigindo erros...");
-                  // Trigger validation manually
-                  form.trigger().then((isValid) => {
-                    console.log("Resultado da validação manual:", isValid);
-                    console.log(
-                      "Erros após validação manual:",
-                      form.formState.errors
-                    );
-                    if (isValid) {
-                      console.log(
-                        "Formulário agora é válido, prosseguindo com o envio"
-                      );
-                      form.handleSubmit(onSubmit)(e);
-                    }
-                  });
-                }
-              }}
-              className="space-y-6"
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informações Pessoais</CardTitle>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <Card className="shadow-md border-green-100">
+                <CardHeader className="bg-green-50 border-b pb-4">
+                  <CardTitle className="text-xl text-green-800">
+                    Informações Pessoais
+                  </CardTitle>
                   {isAuthenticated && (
                     <p className="text-sm text-muted-foreground mt-1">
-                      Suas informações foram preenchidas automaticamente com
-                      base no seu perfil.
+                      Suas informações foram preenchidas automaticamente.
                     </p>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6 pt-6">
                   <FormField
                     control={form.control}
                     name="name"
@@ -479,7 +553,7 @@ export default function SubscriptionCheckoutPage() {
                             placeholder="Seu nome completo"
                             {...field}
                             disabled={isAuthenticated}
-                            className={isAuthenticated ? "bg-gray-100" : ""}
+                            className={isAuthenticated ? "bg-gray-50" : ""}
                           />
                         </FormControl>
                         <FormMessage />
@@ -487,7 +561,7 @@ export default function SubscriptionCheckoutPage() {
                     )}
                   />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
                       control={form.control}
                       name="email"
@@ -500,7 +574,7 @@ export default function SubscriptionCheckoutPage() {
                               type="email"
                               {...field}
                               disabled={isAuthenticated}
-                              className={isAuthenticated ? "bg-gray-100" : ""}
+                              className={isAuthenticated ? "bg-gray-50" : ""}
                             />
                           </FormControl>
                           <FormMessage />
@@ -519,7 +593,7 @@ export default function SubscriptionCheckoutPage() {
                               placeholder="(00) 00000-0000"
                               {...field}
                               disabled={isAuthenticated}
-                              className={isAuthenticated ? "bg-gray-100" : ""}
+                              className={isAuthenticated ? "bg-gray-50" : ""}
                             />
                           </FormControl>
                           <FormMessage />
@@ -539,7 +613,7 @@ export default function SubscriptionCheckoutPage() {
                             placeholder="Rua, número, bairro, cidade, estado, CEP"
                             {...field}
                             disabled={isAuthenticated}
-                            className={isAuthenticated ? "bg-gray-100" : ""}
+                            className={isAuthenticated ? "bg-gray-50" : ""}
                           />
                         </FormControl>
                         <FormMessage />
@@ -580,8 +654,9 @@ export default function SubscriptionCheckoutPage() {
                         <FormLabel>Instruções de Entrega (opcional)</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Instruções adicionais para entrega"
+                            placeholder="Instruções adicionais para entrega (portaria, pontos de referência, etc)"
                             {...field}
+                            className="min-h-[80px]"
                           />
                         </FormControl>
                         <FormMessage />
@@ -591,80 +666,136 @@ export default function SubscriptionCheckoutPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informações de Pagamento</CardTitle>
+              <Card className="shadow-md border-green-100">
+                <CardHeader className="bg-green-50 border-b pb-4">
+                  <CardTitle className="text-xl flex items-center gap-2 text-green-800">
+                    <CreditCard className="h-5 w-5" />
+                    Informações de Pagamento
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="cardName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome no Cartão</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Nome como está no cartão"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <CardContent className="space-y-6 pt-6">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="cardName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome no Cartão</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Nome como está no cartão"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                  <FormField
-                    control={form.control}
-                    name="cardNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Número do Cartão</FormLabel>
-                        <FormControl>
-                          <Input placeholder="0000 0000 0000 0000" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                      <FormField
+                        control={form.control}
+                        name="cardNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Número do Cartão</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="0000 0000 0000 0000"
+                                {...field}
+                                value={formatCardNumber(field.value)}
+                                onChange={(e) => {
+                                  field.onChange(
+                                    formatCardNumber(e.target.value)
+                                  );
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="cardExpiry"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Data de Validade</FormLabel>
-                          <FormControl>
-                            <Input placeholder="MM/AA" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="cardExpiry"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Data de Validade</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="MM/AA"
+                                {...field}
+                                value={formatExpiryDate(field.value)}
+                                onChange={(e) => {
+                                  field.onChange(
+                                    formatExpiryDate(e.target.value)
+                                  );
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="cardCvc"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>CVC</FormLabel>
-                          <FormControl>
-                            <Input placeholder="123" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                      <FormField
+                        control={form.control}
+                        name="cardCvc"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>CVC</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="123"
+                                {...field}
+                                value={formatCVC(field.value)}
+                                onChange={(e) => {
+                                  field.onChange(formatCVC(e.target.value));
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <FormField
+                        control={form.control}
+                        name="savePaymentMethod"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>
+                                Salvar cartão para futuras compras
+                              </FormLabel>
+                              <FormDescription>
+                                Seus dados serão armazenados com segurança
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <div className="flex flex-col gap-4">
+              <div className="mt-6">
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full py-6 text-lg bg-green-600 hover:bg-green-700"
                   disabled={isSubmitting}
-                  onClick={() => console.log("Submit button clicked")}
                 >
                   {isSubmitting ? (
                     <>
@@ -672,123 +803,153 @@ export default function SubscriptionCheckoutPage() {
                       Processando...
                     </>
                   ) : (
-                    "Finalizar Assinatura"
+                    `Finalizar Assinatura - R$ ${calculateTotal
+                      .toFixed(2)
+                      .replace(".", ",")}`
                   )}
                 </Button>
-
-                {process.env.NODE_ENV === "development" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      console.log("Estado do formulário:", {
-                        values: form.getValues(),
-                        errors: form.formState.errors,
-                        isValid: form.formState.isValid,
-                        isDirty: form.formState.isDirty,
-                        isSubmitting: form.formState.isSubmitting,
-                        isAuthenticated,
-                        selectedPlan,
-                        customizableItems,
-                      });
-                    }}
-                  >
-                    Depurar Formulário
-                  </Button>
-                )}
               </div>
             </form>
           </Form>
         </div>
 
         <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Resumo do Pedido</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span className="font-medium">Plano:</span>
-                <span>{selectedPlan.name}</span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="font-medium">Preço base:</span>
-                <span>
-                  R${" "}
-                  {parseFloat(selectedPlan.price).toFixed(2).replace(".", ",")}
-                </span>
-              </div>
-
-              <Separator />
-
-              {selectedPlan.fixedItems && selectedPlan.fixedItems.length > 0 ? (
-                <div className="space-y-2">
-                  <span className="font-medium">Itens inclusos no plano:</span>
-                  <ul className="text-sm space-y-1">
-                    {selectedPlan.fixedItems.map((item) => (
-                      <li key={item.id} className="flex justify-between">
-                        <span>
-                          {item.product.name} x {item.quantity}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Separator />
+          {/* Order Summary Card */}
+          <div className="lg:sticky lg:top-6">
+            <Card className="shadow-md border-green-100">
+              <CardHeader className="bg-green-50 border-b pb-4">
+                <CardTitle className="text-xl flex items-center gap-2 text-green-800">
+                  <ShoppingCart className="h-5 w-5" />
+                  Resumo do Pedido
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {/* Selected Plan */}
+                <div className="mb-4">
+                  <h3 className="font-medium text-gray-900 mb-2">
+                    Plano Selecionado
+                  </h3>
+                  <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-md">
+                    {selectedPlan.imageUrl ? (
+                      <img
+                        src={selectedPlan.imageUrl}
+                        alt={selectedPlan.name}
+                        className="w-16 h-16 object-cover rounded-md"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
+                        <ShoppingCart className="h-8 w-8 text-gray-400" />
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="font-medium">{selectedPlan.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedPlan.description}
+                      </p>
+                      <p className="font-medium text-green-700">
+                        R${" "}
+                        {parseFloat(selectedPlan.price)
+                          .toFixed(2)
+                          .replace(".", ",")}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="text-sm text-muted-foreground py-2">
-                  <p>Este plano não inclui itens fixos.</p>
-                  <Separator className="my-2" />
-                </div>
-              )}
 
-              {customizableItems.length > 0 ? (
-                <>
-                  <div>
-                    <h3 className="font-medium mb-2">Itens personalizados:</h3>
-                    <ul className="space-y-1 text-sm">
+                {/* Fixed Items in Plan if any */}
+                {selectedPlan.fixedItems &&
+                  selectedPlan.fixedItems.length > 0 && (
+                    <div className="mb-4">
+                      <h3 className="font-medium text-gray-900 mb-2">
+                        Itens Incluídos
+                      </h3>
+                      <ul className="space-y-2">
+                        {selectedPlan.fixedItems.map((item) => (
+                          <li
+                            key={item.id}
+                            className="flex justify-between text-sm py-2 border-b border-gray-100"
+                          >
+                            <span>{item.product.name}</span>
+                            <span className="font-medium">
+                              {item.quantity}x
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                {/* Customized Items if any */}
+                {customizableItems.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="font-medium text-gray-900 mb-2">
+                      Personalizações
+                    </h3>
+                    <ul className="space-y-2">
                       {customizableItems.map((item) => (
                         <li
                           key={item.product.id}
-                          className="flex justify-between"
+                          className="flex justify-between text-sm py-2 border-b border-gray-100"
                         >
-                          <span>{item.product.name}</span>
-                          <span>
-                            {item.quantity} x R${" "}
-                            {parseFloat(item.product.price)
-                              .toFixed(2)
-                              .replace(".", ",")}
-                          </span>
+                          <div>
+                            <span>{item.product.name}</span>
+                            {item.product.price && item.quantity > 0 && (
+                              <span className="text-gray-500 text-xs block">
+                                R${" "}
+                                {(
+                                  parseFloat(item.product.price) * item.quantity
+                                )
+                                  .toFixed(2)
+                                  .replace(".", ",")}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-medium">{item.quantity}x</span>
                         </li>
                       ))}
                     </ul>
                   </div>
+                )}
 
-                  <div className="flex justify-between">
-                    <span className="font-medium">
-                      Subtotal personalização:
-                    </span>
-                    <span>
-                      R$ {getCustomizationTotal().toFixed(2).replace(".", ",")}
+                {/* Total */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <div className="flex justify-between font-medium">
+                    <span>Total</span>
+                    <span className="text-green-700">
+                      R$ {calculateTotal.toFixed(2).replace(".", ",")}
                     </span>
                   </div>
-
-                  <Separator />
-                </>
-              ) : (
-                <div className="text-sm text-muted-foreground py-2">
-                  <p>Nenhum item personalizado selecionado.</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Plano mensal com entrega semanal
+                  </p>
                 </div>
-              )}
 
-              <div className="flex justify-between font-bold">
-                <span>Total:</span>
-                <span>R$ {calculateTotal.toFixed(2).replace(".", ",")}</span>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Trust badges */}
+                <div className="mt-8">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-green-600" />
+                      <div className="text-sm">
+                        <p className="font-medium">Pagamento Seguro</p>
+                        <p className="text-xs text-muted-foreground">
+                          Criptografado
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-green-600" />
+                      <div className="text-sm">
+                        <p className="font-medium">Entregas Semanais</p>
+                        <p className="text-xs text-muted-foreground">
+                          Fresquinho sempre
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
