@@ -4,6 +4,7 @@ import { products } from "@/lib/db/schema";
 import { desc, eq, like, or, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth/session";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 
 // Schema de validação para criação/atualização de produtos
 const productSchema = z.object({
@@ -70,25 +71,25 @@ export async function GET(request: NextRequest) {
     // Executar a query
     const productsList = await query;
 
-    // Contar total de produtos para paginação
-    let countQuery = db.select({ count: db.fn.count() }).from(products);
+    // Contar total de produtos para paginação usando SQL direto
+    let countSql = sql`SELECT COUNT(*) FROM products`;
 
-    // Adicionar os mesmos filtros à query de contagem
-    if (search) {
-      countQuery = countQuery.where(
-        or(
-          like(products.name, `%${search}%`),
-          like(products.description || "", `%${search}%`)
-        )
-      );
+    if (search && type && (type === "normal" || type === "exotic")) {
+      countSql = sql`SELECT COUNT(*) FROM products WHERE 
+        (name LIKE ${`%${search}%`} OR description LIKE ${`%${search}%`}) 
+        AND product_type = ${type}`;
+    } else if (search) {
+      countSql = sql`SELECT COUNT(*) FROM products WHERE 
+        name LIKE ${`%${search}%`} OR description LIKE ${`%${search}%`}`;
+    } else if (type && (type === "normal" || type === "exotic")) {
+      countSql = sql`SELECT COUNT(*) FROM products WHERE product_type = ${type}`;
     }
 
-    if (type && (type === "normal" || type === "exotic")) {
-      countQuery = countQuery.where(eq(products.productType, type));
-    }
-
-    const totalResult = await countQuery;
-    const total = Number(totalResult[0]?.count || 0);
+    const totalResult = await db.execute(countSql);
+    const total =
+      totalResult && totalResult.length > 0
+        ? Number(totalResult[0]?.count || 0)
+        : 0;
     const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({

@@ -48,14 +48,16 @@ export default function PlansPage() {
         }
         const data = await response.json();
 
-        // Check if the response contains a plans property
-        if (data.plans) {
-          setPlans(data.plans);
-        } else if (Array.isArray(data)) {
-          setPlans(data);
+        // Verificar se a resposta contém a propriedade 'plans'
+        const plansData = data.plans || data;
+
+        // Garantir que plansData seja um array
+        if (Array.isArray(plansData)) {
+          setPlans(plansData);
         } else {
-          console.error("Unexpected API response format:", data);
-          throw new Error("Formato de resposta inesperado");
+          console.error("Formato de dados inválido:", data);
+          setPlans([]);
+          setError("Formato de dados inválido");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -77,11 +79,27 @@ export default function PlansPage() {
   };
 
   const getNormalRule = (plan: Plan) => {
-    return plan.customizableRules?.find((r) => r.productType === "normal");
+    if (!plan.customizableRules || !Array.isArray(plan.customizableRules)) {
+      return { minQuantity: 0, maxQuantity: 0 };
+    }
+    return (
+      plan.customizableRules.find((r) => r.productType === "normal") || {
+        minQuantity: 0,
+        maxQuantity: 0,
+      }
+    );
   };
 
   const getExoticRule = (plan: Plan) => {
-    return plan.customizableRules?.find((r) => r.productType === "exotic");
+    if (!plan.customizableRules || !Array.isArray(plan.customizableRules)) {
+      return { minQuantity: 0, maxQuantity: 0 };
+    }
+    return (
+      plan.customizableRules.find((r) => r.productType === "exotic") || {
+        minQuantity: 0,
+        maxQuantity: 0,
+      }
+    );
   };
 
   if (isLoading) {
@@ -97,18 +115,6 @@ export default function PlansPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <p className="text-red-500 mb-4">{error}</p>
-        <Button onClick={() => router.refresh()}>Tentar Novamente</Button>
-      </div>
-    );
-  }
-
-  // Ensure plans is an array before rendering
-  const plansArray = Array.isArray(plans) ? plans : [];
-
-  if (plansArray.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        <p className="mb-4">Nenhum plano disponível no momento.</p>
         <Button onClick={() => router.refresh()}>Tentar Novamente</Button>
       </div>
     );
@@ -138,7 +144,7 @@ export default function PlansPage() {
 
         <TabsContent value="cards">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {plansArray.map((plan) => (
+            {plans.map((plan) => (
               <Card key={plan.id} className="flex flex-col h-full">
                 {plan.imageUrl && (
                   <div className="relative h-48 w-full">
@@ -167,7 +173,7 @@ export default function PlansPage() {
                     <div>
                       <h3 className="font-medium mb-2">Inclui:</h3>
                       <ul className="space-y-2">
-                        {plan.fixedItems?.length > 0 && (
+                        {plan.fixedItems.length > 0 && (
                           <li className="flex items-start">
                             <Check className="h-5 w-5 mr-2 text-green-500 shrink-0" />
                             <span>
@@ -234,7 +240,7 @@ export default function PlansPage() {
               <thead>
                 <tr>
                   <th className="text-left p-4 border-b">Plano</th>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <th key={plan.id} className="text-center p-4 border-b">
                       {plan.name}
                     </th>
@@ -244,7 +250,7 @@ export default function PlansPage() {
               <tbody>
                 <tr>
                   <td className="p-4 border-b font-medium">Preço Mensal</td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4 border-b">
                       {formatCurrency(plan.price)}
                     </td>
@@ -252,15 +258,15 @@ export default function PlansPage() {
                 </tr>
                 <tr>
                   <td className="p-4 border-b font-medium">Itens Fixos</td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4 border-b">
-                      {plan.fixedItems?.length || 0} itens
+                      {plan.fixedItems.length} itens
                     </td>
                   ))}
                 </tr>
                 <tr>
                   <td className="p-4 border-b font-medium">Frutas Regulares</td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4 border-b">
                       {getNormalRule(plan)
                         ? `${getNormalRule(plan).minQuantity}-${
@@ -272,7 +278,7 @@ export default function PlansPage() {
                 </tr>
                 <tr>
                   <td className="p-4 border-b font-medium">Frutas Exóticas</td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4 border-b">
                       {getExoticRule(plan)
                         ? `${getExoticRule(plan).minQuantity}-${
@@ -284,7 +290,7 @@ export default function PlansPage() {
                 </tr>
                 <tr>
                   <td className="p-4 border-b font-medium">Entrega</td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4 border-b">
                       Semanal
                     </td>
@@ -292,7 +298,7 @@ export default function PlansPage() {
                 </tr>
                 <tr>
                   <td className="p-4 border-b font-medium">Cancelamento</td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4 border-b">
                       A qualquer momento
                     </td>
@@ -300,7 +306,7 @@ export default function PlansPage() {
                 </tr>
                 <tr>
                   <td className="p-4"></td>
-                  {plansArray.map((plan) => (
+                  {plans.map((plan) => (
                     <td key={plan.id} className="text-center p-4">
                       <Button asChild>
                         <Link href={`/plans/${plan.slug}`}>Escolher</Link>

@@ -60,8 +60,15 @@ export default function ProductsPage() {
         }
         const data = await response.json();
 
+        // Verificar se a resposta contém a propriedade 'products'
+        const productsData = data.products || data;
+
+        if (!Array.isArray(productsData)) {
+          throw new Error("Formato de resposta inválido");
+        }
+
         // Processar os produtos para adicionar status baseado no estoque
-        const processedProducts = data.map((product: Product) => {
+        const processedProducts = productsData.map((product: Product) => {
           let status = "Em Estoque";
           if (product.stockQuantity <= 5) {
             status = "Estoque Crítico";
@@ -282,7 +289,7 @@ export default function ProductsPage() {
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <Link
-                            href={`/dashboard/admin/products/${product.id}/edit`}
+                            href={`/dashboard/admin/products/${product.id}`}
                           >
                             <Edit className="mr-2 h-4 w-4" />
                             <span>Editar</span>

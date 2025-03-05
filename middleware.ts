@@ -4,18 +4,25 @@ import { signToken, verifyToken } from "@/lib/auth/session";
 
 const protectedRoutes = "/dashboard";
 const adminRoutes = "/dashboard/admin";
-const customerRoutes = "/dashboard/customer";
+const customerDashboardRoutes = "/customer/dashboard";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get("session");
+  const customerSessionCookie = request.cookies.get("customer_session");
+
   const isProtectedRoute = pathname.startsWith(protectedRoutes);
   const isAdminRoute = pathname.startsWith(adminRoutes);
-  const isCustomerRoute = pathname.startsWith(customerRoutes);
+  const isCustomerDashboardRoute = pathname.startsWith(customerDashboardRoutes);
 
   // Redirect to sign-in if trying to access protected routes without a session
   if (isProtectedRoute && !sessionCookie) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
+  }
+
+  // Redirect to customer login if trying to access customer dashboard without a customer session
+  if (isCustomerDashboardRoute && !customerSessionCookie) {
+    return NextResponse.redirect(new URL("/customer/login", request.url));
   }
 
   let res = NextResponse.next();
@@ -35,14 +42,6 @@ export async function middleware(request: NextRequest) {
 
       // Role-based access control
       if (isAdminRoute && session.user.role !== "admin") {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-
-      if (
-        isCustomerRoute &&
-        session.user.role !== "member" &&
-        session.user.role !== "admin"
-      ) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
 
@@ -75,6 +74,48 @@ export async function middleware(request: NextRequest) {
       res.cookies.delete("session");
       if (isProtectedRoute) {
         return NextResponse.redirect(new URL("/sign-in", request.url));
+      }
+    }
+  }
+
+  // Handle customer session
+  if (customerSessionCookie) {
+    try {
+      const session = await verifyToken(customerSessionCookie.value);
+
+      // If customer session is invalid or expired, clear it and redirect if on customer dashboard
+      if (!session || !session.isCustomer) {
+        res.cookies.delete("customer_session");
+        if (isCustomerDashboardRoute) {
+          return NextResponse.redirect(new URL("/customer/login", request.url));
+        }
+        return res;
+      }
+
+      // Refresh the customer session if it's about to expire (less than 4 hours left)
+      const expiresAt = new Date(session.expires).getTime();
+      const now = Date.now();
+      const fourHoursInMs = 4 * 60 * 60 * 1000;
+
+      if (expiresAt - now < fourHoursInMs) {
+        const expiresInOneDay = new Date(now + 24 * 60 * 60 * 1000);
+
+        res.cookies.set({
+          name: "customer_session",
+          value: await signToken({
+            ...session,
+            expires: expiresInOneDay.toISOString(),
+          }),
+          httpOnly: true,
+          expires: expiresInOneDay,
+          path: "/",
+        });
+      }
+    } catch (error) {
+      console.error("Error processing customer session:", error);
+      res.cookies.delete("customer_session");
+      if (isCustomerDashboardRoute) {
+        return NextResponse.redirect(new URL("/customer/login", request.url));
       }
     }
   }

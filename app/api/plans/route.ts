@@ -5,6 +5,7 @@ import {
   planFixedItems,
   planCustomizableItems,
   products,
+  userSubscriptions,
 } from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { desc, eq, like, or, and, sql, asc } from "drizzle-orm";
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
     // Obter parâmetros de consulta para filtragem e paginação
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get("search");
+    const filter = searchParams.get("filter"); // Novo parâmetro para filtrar por status
     const limit = searchParams.get("limit")
       ? parseInt(searchParams.get("limit")!)
       : 10;
@@ -49,6 +51,15 @@ export async function GET(request: NextRequest) {
       : 0;
     const sort = searchParams.get("sort") || "name";
     const order = searchParams.get("order") === "desc" ? desc : asc;
+
+    // Construir a condição de busca
+    let whereCondition;
+    if (search) {
+      whereCondition = or(
+        like(subscriptionPlans.name, `%${search}%`),
+        like(subscriptionPlans.description || "", `%${search}%`)
+      );
+    }
 
     // Buscar planos de assinatura
     const plans = await db.query.subscriptionPlans.findMany({
@@ -60,12 +71,7 @@ export async function GET(request: NextRequest) {
           : sort === "price"
           ? order(subscriptionPlans.price)
           : order(subscriptionPlans.createdAt),
-      where: search
-        ? or(
-            like(subscriptionPlans.name, `%${search}%`),
-            like(subscriptionPlans.description || "", `%${search}%`)
-          )
-        : undefined,
+      where: whereCondition,
     });
 
     // Se o usuário estiver autenticado, adicionar informações adicionais
@@ -80,29 +86,62 @@ export async function GET(request: NextRequest) {
       const plansWithDetails = await Promise.all(
         plans.map(async (plan) => {
           // Obter itens fixos
-          const fixedItems = await db.query.planFixedItems.findMany({
-            where: eq(planFixedItems.planId, plan.id),
-            with: {
-              product: true,
-            },
-          });
+          const fixedItems = await db
+            .select({
+              id: planFixedItems.id,
+              planId: planFixedItems.planId,
+              productId: planFixedItems.productId,
+              quantity: planFixedItems.quantity,
+              productName: products.name,
+              productPrice: products.price,
+              productType: products.productType,
+            })
+            .from(planFixedItems)
+            .leftJoin(products, eq(planFixedItems.productId, products.id))
+            .where(eq(planFixedItems.planId, plan.id));
 
           // Obter regras de personalização
-          const customizableRules =
-            await db.query.planCustomizableItems.findMany({
-              where: eq(planCustomizableItems.planId, plan.id),
-            });
+          const customizableRules = await db
+            .select()
+            .from(planCustomizableItems)
+            .where(eq(planCustomizableItems.planId, plan.id));
+
+          // Contar assinantes
+          const subscribersCount = await db
+            .select({
+              count: sql<number>`count(*)`,
+            })
+            .from(userSubscriptions)
+            .where(
+              and(
+                eq(userSubscriptions.planId, plan.id),
+                eq(userSubscriptions.status, "active")
+              )
+            );
+
+          const subscribers = Number(subscribersCount[0]?.count || 0);
 
           return {
             ...plan,
             fixedItems,
             customizableRules,
+            subscribers,
           };
         })
       );
 
+      // Aplicar filtro adicional baseado no parâmetro 'filter'
+      let filteredPlans = plansWithDetails;
+      if (filter === "active") {
+        filteredPlans = plansWithDetails.filter((plan) => plan.subscribers > 0);
+      } else if (filter === "inactive") {
+        filteredPlans = plansWithDetails.filter(
+          (plan) => plan.subscribers === 0
+        );
+      }
+
       return NextResponse.json({
-        plans: plansWithDetails,
+        plans: filteredPlans,
         total: totalPlans,
         limit,
         offset,
@@ -112,14 +151,11 @@ export async function GET(request: NextRequest) {
     // Para usuários não autenticados, retornar apenas os planos básicos
     return NextResponse.json({
       plans,
-      total: plans.length,
-      limit,
-      offset,
     });
   } catch (error) {
     console.error("Erro ao buscar planos:", error);
     return NextResponse.json(
-      { error: "Erro ao buscar planos" },
+      { error: "Erro ao buscar planos " + error },
       { status: 500 }
     );
   }

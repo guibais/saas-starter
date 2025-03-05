@@ -3,7 +3,7 @@ import postgres from "postgres";
 import * as schema from "./schema";
 
 // Database connection string from environment variables
-const connectionString = process.env.DATABASE_URL || "";
+const connectionString = process.env.POSTGRES_URL || "";
 
 // Create a new postgres client
 const client = postgres(connectionString, { max: 1 });

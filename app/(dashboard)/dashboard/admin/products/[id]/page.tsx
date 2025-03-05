@@ -49,6 +49,7 @@ export default function EditProductPage({
   params: { id: string };
 }) {
   const router = useRouter();
+  const productId = params.id; // Usando diretamente, mas com uma variável separada
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -66,7 +67,7 @@ export default function EditProductPage({
   useEffect(() => {
     const loadProduct = async () => {
       try {
-        const product = await fetchProduct(params.id);
+        const product = await fetchProduct(productId);
         setFormData({
           name: product.name,
           description: product.description || "",
@@ -86,7 +87,7 @@ export default function EditProductPage({
     };
 
     loadProduct();
-  }, [params.id]);
+  }, [productId]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -108,7 +109,7 @@ export default function EditProductPage({
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/products/${params.id}`, {
+      const response = await fetch(`/api/products/${productId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -142,7 +143,7 @@ export default function EditProductPage({
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/products/${params.id}`, {
+      const response = await fetch(`/api/products/${productId}`, {
         method: "DELETE",
       });
 

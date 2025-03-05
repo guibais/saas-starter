@@ -1,18 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import {
-  ShoppingBag,
-  Package,
-  Clipboard,
-  Users,
-  BarChart,
-  Settings,
-  Menu,
-} from "lucide-react";
+import { ChevronRight } from "lucide-react";
+
+// Componente de Breadcrumb
+function Breadcrumb() {
+  const pathname = usePathname();
+  const segments = pathname.split("/").filter(Boolean);
+
+  // Mapeamento de segmentos para nomes mais amigáveis
+  const segmentNames: Record<string, string> = {
+    dashboard: "Dashboard",
+    admin: "Admin",
+    products: "Produtos",
+    plans: "Planos",
+    inventory: "Estoque",
+    orders: "Pedidos",
+    users: "Usuários",
+    subscriptions: "Assinaturas",
+  };
+
+  return (
+    <nav className="flex items-center text-sm text-gray-500 mb-4 overflow-x-auto pb-2">
+      <Link
+        href="/dashboard/admin"
+        className="hover:text-gray-900 whitespace-nowrap"
+      >
+        {segmentNames["admin"]}
+      </Link>
+      {segments.slice(2).map((segment, index) => {
+        // Ignorar segmentos numéricos (IDs)
+        if (!isNaN(Number(segment))) {
+          return null;
+        }
+
+        const href = `/${segments.slice(0, index + 3).join("/")}`;
+        const isLast = index === segments.slice(2).length - 1;
+
+        return (
+          <div key={segment} className="flex items-center whitespace-nowrap">
+            <ChevronRight className="h-4 w-4 mx-1 flex-shrink-0" />
+            {isLast ? (
+              <span className="font-medium text-gray-900">
+                {segmentNames[segment] || segment}
+              </span>
+            ) : (
+              <Link href={href} className="hover:text-gray-900">
+                {segmentNames[segment] || segment}
+              </Link>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
 
 export default function AdminLayout({
   children,
@@ -20,77 +64,14 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const navItems = [
-    { href: "/dashboard/admin/products", icon: ShoppingBag, label: "Produtos" },
-    {
-      href: "/dashboard/admin/plans",
-      icon: Package,
-      label: "Planos de Assinatura",
-    },
-    { href: "/dashboard/admin/inventory", icon: Clipboard, label: "Estoque" },
-    { href: "/dashboard/admin/orders", icon: BarChart, label: "Pedidos" },
-    { href: "/dashboard/admin/users", icon: Users, label: "Usuários" },
-    {
-      href: "/dashboard/admin/settings",
-      icon: Settings,
-      label: "Configurações",
-    },
-  ];
 
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-68px)] max-w-7xl mx-auto w-full">
-      {/* Mobile header */}
-      <div className="lg:hidden flex items-center justify-between bg-white border-b border-gray-200 p-4">
-        <div className="flex items-center">
-          <span className="font-medium">Administração</span>
-        </div>
-        <Button
-          className="-mr-3"
-          variant="ghost"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        >
-          <Menu className="h-6 w-6" />
-          <span className="sr-only">Alternar menu lateral</span>
-        </Button>
-      </div>
-
-      <div className="flex flex-1 overflow-hidden h-full">
-        {/* Sidebar */}
-        <aside
-          className={`w-64 bg-white lg:bg-gray-50 border-r border-gray-200 lg:block ${
-            isSidebarOpen ? "block" : "hidden"
-          } lg:relative absolute inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-            isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <div className="p-4 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-[#103f25]">Tudo Fresco</h2>
-            <p className="text-sm text-gray-500">Painel de Administração</p>
-          </div>
-          <nav className="h-full overflow-y-auto p-4">
-            {navItems.map((item) => (
-              <Link key={item.href} href={item.href} passHref>
-                <Button
-                  variant={pathname === item.href ? "secondary" : "ghost"}
-                  className={`shadow-none my-1 w-full justify-start ${
-                    pathname === item.href ? "bg-gray-100" : ""
-                  }`}
-                  onClick={() => setIsSidebarOpen(false)}
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  {item.label}
-                </Button>
-              </Link>
-            ))}
-          </nav>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto p-0 lg:p-4 bg-gray-50">
-          {children}
-        </main>
+    <div className="w-full">
+      {/* Main content */}
+      <div className="w-full">
+        {/* Breadcrumb */}
+        {pathname !== "/dashboard/admin" && <Breadcrumb />}
+        {children}
       </div>
     </div>
   );

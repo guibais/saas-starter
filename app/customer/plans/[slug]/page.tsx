@@ -70,6 +70,10 @@ export default function PlanDetailPage({
 }: {
   params: { slug: string };
 }) {
+  // Acessar o slug diretamente do objeto params
+  // Isso será substituído por React.use() em versões futuras do Next.js
+  const { slug } = params;
+
   const router = useRouter();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,7 +102,7 @@ export default function PlanDetailPage({
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/plans/slug/${params.slug}`);
+        const response = await fetch(`/api/plans/slug/${slug}`);
         if (!response.ok) {
           throw new Error("Falha ao carregar detalhes do plano");
         }
@@ -117,7 +121,17 @@ export default function PlanDetailPage({
           throw new Error("Falha ao carregar produtos disponíveis");
         }
         const productsData = await productsResponse.json();
-        setAvailableProducts(productsData);
+
+        // Verificar se a resposta contém a propriedade 'products'
+        const productsArray = productsData.products || productsData;
+
+        // Garantir que productsArray seja um array
+        if (Array.isArray(productsArray)) {
+          setAvailableProducts(productsArray);
+        } else {
+          console.error("Formato de dados de produtos inválido:", productsData);
+          setAvailableProducts([]);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro desconhecido");
         toast.error("Não foi possível carregar os detalhes do plano");
@@ -132,7 +146,7 @@ export default function PlanDetailPage({
     return () => {
       clearCustomization();
     };
-  }, [params.slug, setSelectedPlan, setCustomizationRules, clearCustomization]);
+  }, [slug, setSelectedPlan, setCustomizationRules, clearCustomization]);
 
   const handleAddToCustomization = (product: Product) => {
     addCustomizationItem(product as any, 1);
@@ -165,11 +179,31 @@ export default function PlanDetailPage({
   };
 
   const getNormalProducts = () => {
-    return availableProducts.filter((p) => p.productType === "normal");
+    if (!availableProducts || !Array.isArray(availableProducts) || !plan) {
+      return [];
+    }
+
+    // Obter IDs de produtos que já são itens fixos
+    const fixedProductIds = plan.fixedItems.map((item) => item.product.id);
+
+    // Filtrar produtos normais, excluindo os que já são itens fixos
+    return availableProducts
+      .filter((p) => p.productType === "normal")
+      .filter((p) => !fixedProductIds.includes(p.id));
   };
 
   const getExoticProducts = () => {
-    return availableProducts.filter((p) => p.productType === "exotic");
+    if (!availableProducts || !Array.isArray(availableProducts) || !plan) {
+      return [];
+    }
+
+    // Obter IDs de produtos que já são itens fixos
+    const fixedProductIds = plan.fixedItems.map((item) => item.product.id);
+
+    // Filtrar produtos exóticos, excluindo os que já são itens fixos
+    return availableProducts
+      .filter((p) => p.productType === "exotic")
+      .filter((p) => !fixedProductIds.includes(p.id));
   };
 
   const getNormalRule = () => {
@@ -302,6 +336,38 @@ export default function PlanDetailPage({
             </TabsContent>
 
             <TabsContent value="customize" className="space-y-6">
+              {plan.fixedItems.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Itens Fixos Incluídos</CardTitle>
+                    <CardDescription>
+                      Estes itens já estão incluídos no seu plano e não podem
+                      ser alterados
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Produto</TableHead>
+                          <TableHead>Quantidade</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {plan.fixedItems.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">
+                              {item.product.name}
+                            </TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+
               {normalRule && (
                 <Card>
                   <CardHeader>

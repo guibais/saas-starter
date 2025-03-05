@@ -51,24 +51,12 @@ export async function verifyToken(input: string) {
 export async function getSession() {
   try {
     // Get the session cookie from request headers
-    const cookieHeader = cookies().toString();
-    if (!cookieHeader) return null;
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("session");
 
-    // Parse the cookie header to find the session cookie
-    const cookiePairs = cookieHeader.split(";");
-    let sessionToken = null;
+    if (!sessionCookie) return null;
 
-    for (const pair of cookiePairs) {
-      const [name, value] = pair.trim().split("=");
-      if (name === "session") {
-        sessionToken = decodeURIComponent(value);
-        break;
-      }
-    }
-
-    if (!sessionToken) {
-      return null;
-    }
+    const sessionToken = sessionCookie.value;
 
     // Verify the token
     const session = await verifyToken(sessionToken);
@@ -162,7 +150,8 @@ export async function setSession(user: User) {
   const token = await signToken(session);
 
   // Set the session cookie
-  (await cookies()).set({
+  const cookieStore = await cookies();
+  cookieStore.set({
     name: "session",
     value: token,
     httpOnly: true,

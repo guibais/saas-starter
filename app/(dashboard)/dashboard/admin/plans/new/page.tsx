@@ -71,7 +71,9 @@ export default function NewPlanPage() {
           throw new Error("Falha ao carregar produtos");
         }
         const data = await response.json();
-        setProducts(data);
+        // Verificar se a resposta contém a propriedade 'products' ou se é um array diretamente
+        const productsData = data.products || data;
+        setProducts(Array.isArray(productsData) ? productsData : []);
       } catch (error) {
         toast.error("Erro ao carregar produtos");
         console.error(error);
@@ -178,7 +180,18 @@ export default function NewPlanPage() {
           productId: item.productId,
           quantity: item.quantity,
         })),
-        customizableRules: formData.customizableRules,
+        customizableRules: [
+          {
+            productType: "normal",
+            minQuantity: formData.customizableRules.normal.min,
+            maxQuantity: formData.customizableRules.normal.max,
+          },
+          {
+            productType: "exotic",
+            minQuantity: formData.customizableRules.exotic.min,
+            maxQuantity: formData.customizableRules.exotic.max,
+          },
+        ],
       };
 
       // Enviar para a API
@@ -192,7 +205,9 @@ export default function NewPlanPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao criar plano");
+        throw new Error(
+          JSON.stringify(errorData.error) || "Erro ao criar plano"
+        );
       }
 
       toast.success("Plano criado com sucesso");

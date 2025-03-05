@@ -4,19 +4,14 @@ import {
   userSubscriptions,
   subscriptionItems,
   users,
+  customers,
   products,
 } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth/session";
+import { getSession, hashPassword } from "@/lib/auth/session";
 import { eq, sql } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   try {
-    // Verificar autenticação
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-    }
-
     // Obter dados do corpo da requisição
     const body = await request.json();
 
@@ -55,6 +50,70 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Verificar autenticação ou criar nova conta
+    let customerId;
+    const session = await getSession();
+
+    if (session) {
+      // Usuário já está autenticado
+      customerId = session.user.id;
+    } else if (body.createAccount && body.userDetails) {
+      // Criar nova conta de cliente
+      const { name, email, phone, address, deliveryInstructions, password } =
+        body.userDetails;
+
+      // Verificar se o email já existe
+      const existingCustomer = await db.query.customers.findFirst({
+        where: eq(customers.email, email),
+      });
+
+      if (existingCustomer) {
+        return NextResponse.json(
+          { error: "Email já cadastrado. Por favor, faça login." },
+          { status: 400 }
+        );
+      }
+
+      // Verificar se a senha foi fornecida
+      if (!password) {
+        return NextResponse.json(
+          { error: "Senha é obrigatória para criar uma conta" },
+          { status: 400 }
+        );
+      }
+
+      // Usar a senha fornecida pelo usuário
+      const hashedPassword = await hashPassword(password);
+
+      // Criar novo cliente
+      const [newCustomer] = await db
+        .insert(customers)
+        .values({
+          name,
+          email,
+          passwordHash: hashedPassword,
+          address,
+          phone,
+          deliveryInstructions,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      customerId = newCustomer.id;
+
+      // TODO: Enviar email com a senha temporária
+      console.log(
+        `Nova conta criada para ${email} com senha temporária: ${password}`
+      );
+    } else {
+      return NextResponse.json(
+        { error: "Autenticação necessária para criar assinatura" },
+        { status: 401 }
+      );
+    }
+
+    // Continuar com a criação da assinatura usando customerId
     // Atualizar informações do usuário se fornecidas
     if (body.userDetails) {
       await db
@@ -65,7 +124,7 @@ export async function POST(request: NextRequest) {
           address: body.userDetails.address,
           deliveryInstructions: body.userDetails.deliveryInstructions,
         })
-        .where(eq(users.id, session.user.id));
+        .where(eq(users.id, customerId));
     }
 
     // Criar a assinatura
@@ -78,7 +137,7 @@ export async function POST(request: NextRequest) {
       sql`INSERT INTO user_subscriptions 
           (user_id, plan_id, status, start_date, next_delivery_date, created_at, updated_at) 
           VALUES 
-          (${session.user.id}, ${body.planId}, 'active', ${startDate}, ${nextDeliveryDate}, NOW(), NOW()) 
+          (${customerId}, ${body.planId}, 'active', ${startDate}, ${nextDeliveryDate}, NOW(), NOW()) 
           RETURNING id, status, start_date as "startDate", next_delivery_date as "nextDeliveryDate"`
     );
 

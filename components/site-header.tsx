@@ -59,7 +59,7 @@ export async function SiteHeader() {
               </Button>
             </Link>
           ) : (
-            <Link href="/login">
+            <Link href="/customer/login">
               <Button variant="outline" size="sm">
                 Entrar
               </Button>
@@ -111,7 +111,7 @@ export async function SiteHeader() {
                     Minha Conta
                   </Link>
                 ) : (
-                  <Link href="/login">
+                  <Link href="/customer/login">
                     <Button className="w-full bg-green-800 hover:bg-green-700">
                       Entrar
                     </Button>

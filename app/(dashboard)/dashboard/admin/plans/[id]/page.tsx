@@ -70,6 +70,7 @@ interface Product {
 
 export default function EditPlanPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const planId = params.id;
   const [activeTab, setActiveTab] = useState("basic");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -96,7 +97,8 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
           throw new Error("Falha ao carregar produtos");
         }
         const data = await response.json();
-        setProducts(data);
+        const productsData = data.products || data;
+        setProducts(Array.isArray(productsData) ? productsData : []);
       } catch (error) {
         toast.error("Erro ao carregar produtos");
         console.error(error);
@@ -109,26 +111,50 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
   // Carregar dados do plano
   useEffect(() => {
     const loadPlan = async () => {
+      setIsLoading(true);
       try {
-        setIsLoading(true);
         const response = await fetch(`/api/plans/${params.id}`);
-
         if (!response.ok) {
           throw new Error("Falha ao carregar plano");
         }
+        const planData = await response.json();
 
-        const plan = await response.json();
+        // Processar as regras de customização
+        const customizableRules = {
+          normal: { min: 0, max: 0 },
+          exotic: { min: 0, max: 0 },
+        };
+
+        // Se customizableRules for um array, processar cada regra
+        if (Array.isArray(planData.customizableRules)) {
+          planData.customizableRules.forEach((rule: any) => {
+            if (rule.productType === "normal") {
+              customizableRules.normal.min = rule.minQuantity;
+              customizableRules.normal.max = rule.maxQuantity;
+            } else if (rule.productType === "exotic") {
+              customizableRules.exotic.min = rule.minQuantity;
+              customizableRules.exotic.max = rule.maxQuantity;
+            }
+          });
+        }
+
+        // Processar os itens fixos
+        const fixedItems = planData.fixedItems.map((item: any) => ({
+          id: item.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          productName: item.productName || "",
+          productPrice: item.productPrice || "",
+          productType: item.productType || "",
+        }));
 
         setFormData({
-          name: plan.name,
-          description: plan.description || "",
-          price: plan.price,
-          imageUrl: plan.imageUrl || "",
-          fixedItems: plan.fixedItems || [],
-          customizableRules: plan.customizableRules || {
-            normal: { min: 0, max: 0 },
-            exotic: { min: 0, max: 0 },
-          },
+          name: planData.name,
+          description: planData.description || "",
+          price: planData.price,
+          imageUrl: planData.imageUrl || "",
+          fixedItems,
+          customizableRules,
         });
       } catch (error) {
         toast.error("Erro ao carregar plano");
@@ -139,7 +165,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
     };
 
     loadPlan();
-  }, [params.id]);
+  }, [planId]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -243,7 +269,18 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
           productId: item.productId,
           quantity: item.quantity,
         })),
-        customizableRules: formData.customizableRules,
+        customizableRules: [
+          {
+            productType: "normal",
+            minQuantity: formData.customizableRules.normal.min,
+            maxQuantity: formData.customizableRules.normal.max,
+          },
+          {
+            productType: "exotic",
+            minQuantity: formData.customizableRules.exotic.min,
+            maxQuantity: formData.customizableRules.exotic.max,
+          },
+        ],
       };
 
       // Enviar para a API

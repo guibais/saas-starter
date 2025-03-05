@@ -77,12 +77,54 @@ export default function PlansPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch("/api/plans");
+        // Construir URL com parâmetros de busca e filtro
+        const url = new URL("/api/plans", window.location.origin);
+        if (searchTerm) {
+          url.searchParams.append("search", searchTerm);
+        }
+        if (filter !== "all") {
+          url.searchParams.append("filter", filter);
+        }
+
+        const response = await fetch(url.toString());
         if (!response.ok) {
           throw new Error("Falha ao carregar planos");
         }
         const data = await response.json();
-        setPlans(data);
+        // Verificar se a resposta contém a propriedade 'plans'
+        if (data.plans) {
+          // Transformar os dados de customizableRules para o formato esperado
+          const processedPlans = data.plans.map((plan: any) => {
+            // Processar as regras de customização
+            const customizableRules = {
+              normal: { min: 0, max: 0 },
+              exotic: { min: 0, max: 0 },
+            };
+
+            // Se customizableRules for um array, processar cada regra
+            if (Array.isArray(plan.customizableRules)) {
+              plan.customizableRules.forEach((rule: any) => {
+                if (rule.productType === "normal") {
+                  customizableRules.normal.min = rule.minQuantity;
+                  customizableRules.normal.max = rule.maxQuantity;
+                } else if (rule.productType === "exotic") {
+                  customizableRules.exotic.min = rule.minQuantity;
+                  customizableRules.exotic.max = rule.maxQuantity;
+                }
+              });
+            }
+
+            return {
+              ...plan,
+              customizableRules,
+            };
+          });
+
+          setPlans(processedPlans);
+        } else {
+          // Caso a API retorne diretamente um array
+          setPlans(Array.isArray(data) ? data : []);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro desconhecido");
         toast.error("Não foi possível carregar os planos");
@@ -91,21 +133,13 @@ export default function PlansPage() {
       }
     };
 
-    fetchPlans();
-  }, []);
+    // Usar um debounce para evitar muitas requisições durante a digitação
+    const timeoutId = setTimeout(fetchPlans, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, filter]);
 
-  // Filtrar planos com base no termo de busca e filtro
-  const filteredPlans = plans.filter((plan) => {
-    const matchesSearch = plan.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-
-    if (filter === "all") return matchesSearch;
-    if (filter === "active") return matchesSearch && plan.subscribers > 0;
-    if (filter === "inactive") return matchesSearch && plan.subscribers === 0;
-
-    return matchesSearch;
-  });
+  // Não precisamos mais filtrar no cliente, pois a API já retorna os dados filtrados
+  const filteredPlans = Array.isArray(plans) ? plans : [];
 
   // Função para excluir um plano
   const handleDeletePlan = async () => {
@@ -230,8 +264,12 @@ export default function PlansPage() {
                   <TableCell>R$ {parseFloat(plan.price).toFixed(2)}</TableCell>
                   <TableCell>{plan.fixedItems.length} itens</TableCell>
                   <TableCell>
-                    {plan.customizableRules.normal.max +
-                      plan.customizableRules.exotic.max}{" "}
+                    {plan.customizableRules &&
+                    plan.customizableRules.normal &&
+                    plan.customizableRules.exotic
+                      ? (plan.customizableRules.normal.max || 0) +
+                        (plan.customizableRules.exotic.max || 0)
+                      : 0}{" "}
                     itens
                   </TableCell>
                   <TableCell>
