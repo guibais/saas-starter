@@ -14,9 +14,12 @@ export async function GET(
   { params }: { params: { slug: string } }
 ) {
   try {
+    // Ensure params is awaited before using its properties
+    const { slug } = await params;
+
     // Buscar o plano pelo slug
     const plan = await db.query.subscriptionPlans.findFirst({
-      where: eq(subscriptionPlans.slug, params.slug),
+      where: eq(subscriptionPlans.slug, slug),
     });
 
     if (!plan) {

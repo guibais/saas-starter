@@ -78,10 +78,13 @@ export default function PlanDetailPage({
 
   const router = useRouter();
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "customize">(
+    "overview"
+  );
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const {
     selectedPlan,
@@ -126,15 +129,15 @@ export default function PlanDetailPage({
 
         // Check if productsData is an array or has a products property
         if (Array.isArray(productsData)) {
-          setAvailableProducts(productsData);
+          setProducts(productsData);
         } else if (
           productsData.products &&
           Array.isArray(productsData.products)
         ) {
-          setAvailableProducts(productsData.products);
+          setProducts(productsData.products);
         } else {
           console.error("Unexpected API response format:", productsData);
-          setAvailableProducts([]);
+          setProducts([]);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -164,7 +167,7 @@ export default function PlanDetailPage({
     updateCustomizationQuantity(productId, quantity);
   };
 
-  // Verificar se o usuário já personalizou a cesta
+  // Verificar se o usuário adicionou pelo menos um item à cesta
   const hasCustomizedBasket = () => {
     return customizableItems.length > 0;
   };
@@ -266,7 +269,15 @@ export default function PlanDetailPage({
   // Modificar o botão de checkout para verificar se a cesta foi personalizada
   const handleProceedToCheckout = () => {
     if (!hasCustomizedBasket()) {
-      toast.error("Por favor, complete a personalização da sua cesta");
+      setValidationError("Por favor, complete a personalização da sua cesta");
+      // Focar na aba de customização
+      setActiveTab("customize");
+      return;
+    }
+
+    if (!isCustomizationValid()) {
+      const errors = getValidationErrors();
+      setValidationError(errors.join("\n"));
       return;
     }
 
@@ -285,8 +296,8 @@ export default function PlanDetailPage({
   const getNormalProducts = () => {
     // Ensure availableProducts is an array before filtering
     // Also filter out products that are already fixed items in the plan
-    return Array.isArray(availableProducts)
-      ? availableProducts
+    return Array.isArray(products)
+      ? products
           .filter((p) => p.productType === "normal")
           .filter(
             (p) => !plan?.fixedItems.some((item) => item.productId === p.id)
@@ -297,8 +308,8 @@ export default function PlanDetailPage({
   const getExoticProducts = () => {
     // Ensure availableProducts is an array before filtering
     // Also filter out products that are already fixed items in the plan
-    return Array.isArray(availableProducts)
-      ? availableProducts
+    return Array.isArray(products)
+      ? products
           .filter((p) => p.productType === "exotic")
           .filter(
             (p) => !plan?.fixedItems.some((item) => item.productId === p.id)

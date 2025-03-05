@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useSubscriptionStore } from "@/lib/state/subscriptionStore";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Esquema de validação para o formulário de checkout
@@ -82,6 +82,19 @@ export default function SubscriptionCheckoutPage() {
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
   const [customizableItems, setCustomizableItems] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<{
+    title: string;
+    message: string;
+    primaryAction: {
+      label: string;
+      href: string;
+    };
+    secondaryAction: {
+      label: string;
+      href: string;
+    };
+  } | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const { getCustomizationTotal, isCustomizationValid, clearCustomization } =
     useSubscriptionStore();
@@ -181,8 +194,9 @@ export default function SubscriptionCheckoutPage() {
 
     // Verificar se há um plano selecionado
     if (!selectedPlan) {
-      toast.error("Selecione um plano antes de prosseguir com o checkout");
-      router.push("/plans");
+      setValidationError(
+        "Selecione um plano antes de prosseguir com o checkout"
+      );
       return;
     }
 
@@ -196,29 +210,26 @@ export default function SubscriptionCheckoutPage() {
 
     if (!authLoading) {
       if (!selectedPlan) {
-        toast.error("Nenhum plano selecionado");
-        router.push("/plans");
+        setValidationError("Nenhum plano selecionado");
         return;
       }
 
       if (!isCustomizationValid()) {
-        toast.error("Sua personalização não está completa");
-        router.push(`/plans/${selectedPlan.slug}`);
+        setValidationError("Sua personalização não está completa");
         return;
       }
     }
-  }, [authLoading, selectedPlan, router, isCustomizationValid]);
+  }, [authLoading, selectedPlan, isCustomizationValid]);
 
   // Função para processar o checkout
   const onSubmit = async (data: CheckoutFormValues) => {
     if (!selectedPlan) {
-      toast.error("Nenhum plano selecionado");
-      router.push("/plans");
+      setValidationError("Nenhum plano selecionado");
       return;
     }
 
     if (!isCustomizationValid()) {
-      toast.error("Por favor, complete a personalização do seu plano");
+      setValidationError("Por favor, complete a personalização do seu plano");
       return;
     }
 
@@ -259,21 +270,26 @@ export default function SubscriptionCheckoutPage() {
       // Limpar o estado de customização
       clearCustomization();
 
-      // Mostrar mensagem de sucesso
-      toast.success("Assinatura criada com sucesso!");
-
-      // Redirecionar para a página de sucesso ou dashboard
-      if (isAuthenticated) {
-        router.push("/customer/dashboard/subscription");
-      } else {
-        // Se uma conta foi criada, redirecionar para o login
-        router.push(
-          "/customer/login?message=Conta criada com sucesso! Faça login para acessar sua assinatura."
-        );
-      }
+      // Mostrar um alerta de sucesso com botões para navegação
+      setSuccessMessage({
+        title: "Assinatura criada com sucesso!",
+        message: isAuthenticated
+          ? "Sua assinatura foi criada e já está disponível no seu painel."
+          : "Sua conta foi criada. Faça login para acessar sua assinatura.",
+        primaryAction: {
+          label: isAuthenticated ? "Ver minhas assinaturas" : "Fazer login",
+          href: isAuthenticated
+            ? "/customer/dashboard/subscription"
+            : "/customer/login",
+        },
+        secondaryAction: {
+          label: "Voltar para os planos",
+          href: "/plans",
+        },
+      });
     } catch (error: any) {
       console.error("Erro no checkout:", error);
-      toast.error(error.message || "Erro ao processar assinatura");
+      setError(error.message || "Erro ao processar assinatura");
     } finally {
       setIsSubmitting(false);
     }
@@ -293,11 +309,48 @@ export default function SubscriptionCheckoutPage() {
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription className="flex flex-col gap-4">
+            <p>{error}</p>
+            <div className="flex gap-4 mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setError(null)}
+              >
+                Fechar
+              </Button>
+            </div>
+          </AlertDescription>
         </Alert>
         <Button onClick={() => router.push("/plans")}>
           Voltar para os planos
         </Button>
+      </div>
+    );
+  }
+
+  // Mostrar mensagem de sucesso com botões de navegação
+  if (successMessage) {
+    return (
+      <div className="container max-w-5xl py-8">
+        <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
+          <CheckCircle className="h-4 w-4 text-green-500" />
+          <AlertTitle>{successMessage.title}</AlertTitle>
+          <AlertDescription>{successMessage.message}</AlertDescription>
+        </Alert>
+        <div className="flex gap-4 mt-6">
+          <Button
+            onClick={() => router.push(successMessage.primaryAction.href)}
+          >
+            {successMessage.primaryAction.label}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => router.push(successMessage.secondaryAction.href)}
+          >
+            {successMessage.secondaryAction.label}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -319,6 +372,33 @@ export default function SubscriptionCheckoutPage() {
   return (
     <div className="container max-w-5xl py-8">
       <h1 className="text-3xl font-bold mb-6">Finalizar Assinatura</h1>
+
+      {validationError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Erro de validação</AlertTitle>
+          <AlertDescription className="flex flex-col gap-4">
+            <p>{validationError}</p>
+            <div className="flex gap-4 mt-2">
+              {selectedPlan && (
+                <Button
+                  size="sm"
+                  onClick={() => router.push(`/plans/${selectedPlan.slug}`)}
+                >
+                  Voltar para personalização
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => router.push("/plans")}
+              >
+                Ver todos os planos
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">

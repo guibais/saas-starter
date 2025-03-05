@@ -82,19 +82,21 @@ export default function PlanDetailPage({
   const [activeTab, setActiveTab] = useState("overview");
 
   const {
-    selectedPlan,
-    setSelectedPlan,
     customizableItems,
     addCustomizationItem,
     removeCustomizationItem,
     updateCustomizationQuantity,
-    getCustomizationItemsByType,
-    getCustomizationItemCount,
     isCustomizationValid,
     getValidationErrors,
+    setSelectedPlan,
     setCustomizationRules,
     clearCustomization,
   } = useSubscriptionStore();
+
+  // Verificar se o usuário adicionou pelo menos um item à cesta
+  const hasCustomizedBasket = () => {
+    return customizableItems.length > 0;
+  };
 
   // Buscar detalhes do plano
   useEffect(() => {
@@ -161,13 +163,21 @@ export default function PlanDetailPage({
   };
 
   const handleProceedToCheckout = () => {
+    if (!hasCustomizedBasket()) {
+      toast.error("Por favor, complete a personalização da sua cesta");
+      // Focar na aba de customização
+      setActiveTab("customize");
+      return;
+    }
+
     if (!isCustomizationValid()) {
       const errors = getValidationErrors();
       toast.error(errors.join("\n"));
       return;
     }
 
-    router.push("/checkout/subscription");
+    // Redirecionar para o checkout com o slug do plano como parâmetro
+    router.push(`/checkout/subscription?plan=${slug}`);
   };
 
   const formatCurrency = (value: string | number) => {
@@ -238,10 +248,20 @@ export default function PlanDetailPage({
 
   const normalRule = getNormalRule();
   const exoticRule = getExoticRule();
-  const normalItems = getCustomizationItemsByType("normal");
-  const exoticItems = getCustomizationItemsByType("exotic");
-  const normalCount = getCustomizationItemCount("normal");
-  const exoticCount = getCustomizationItemCount("exotic");
+  const normalItems = customizableItems.filter(
+    (item) => item.product.productType === "normal"
+  );
+  const exoticItems = customizableItems.filter(
+    (item) => item.product.productType === "exotic"
+  );
+  const normalCount = normalItems.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
+  const exoticCount = exoticItems.reduce(
+    (total, item) => total + item.quantity,
+    0
+  );
 
   return (
     <div className="container mx-auto py-8 px-4">
