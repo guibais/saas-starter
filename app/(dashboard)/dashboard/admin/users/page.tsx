@@ -49,6 +49,14 @@ export default function UsersPage() {
       setError(null);
       try {
         const response = await fetch("/api/users");
+
+        if (response.status === 401) {
+          // Redirecionar para a página de login administrativo
+          toast.error("Sessão expirada. Faça login novamente.");
+          router.push("/admin-login");
+          return;
+        }
+
         if (!response.ok) {
           throw new Error("Falha ao carregar usuários");
         }
@@ -64,7 +72,7 @@ export default function UsersPage() {
     };
 
     loadUsers();
-  }, []);
+  }, [router]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR", {

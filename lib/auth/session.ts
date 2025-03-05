@@ -71,6 +71,39 @@ export async function getSession() {
   }
 }
 
+// Get customer session specifically
+export async function getCustomerSession() {
+  try {
+    // Get the customer session cookie from request headers
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("customer_session");
+
+    if (!sessionCookie) {
+      console.log("[Auth] Customer session cookie not found");
+      return null;
+    }
+
+    const sessionToken = sessionCookie.value;
+
+    // Verify the token
+    const session = await verifyToken(sessionToken);
+    if (!session) {
+      console.log("[Auth] Customer session token invalid");
+      return null;
+    }
+
+    if (!session.isCustomer) {
+      console.log("[Auth] Session is not a customer session");
+      return null;
+    }
+
+    return session;
+  } catch (error) {
+    console.error("[Auth] Error getting customer session:", error);
+    return null;
+  }
+}
+
 // Client-side session operations
 export async function login(email: string, password: string) {
   try {

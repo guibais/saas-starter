@@ -88,6 +88,14 @@ export default function UserDetailsPage({
       setError(null);
       try {
         const response = await fetch(`/api/users/${params.id}`);
+
+        if (response.status === 401) {
+          // Redirecionar para a página de login administrativo
+          toast.error("Sessão expirada. Faça login novamente.");
+          router.push("/admin-login");
+          return;
+        }
+
         if (!response.ok) {
           throw new Error("Falha ao carregar dados do usuário");
         }
@@ -107,7 +115,7 @@ export default function UserDetailsPage({
     };
 
     loadData();
-  }, [params.id]);
+  }, [params.id, router]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";

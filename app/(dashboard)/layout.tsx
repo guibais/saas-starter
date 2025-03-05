@@ -13,7 +13,6 @@ export default async function Layout({
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      <DashboardHeader user={user} />
       <div className="flex-1">{children}</div>
     </div>
   );

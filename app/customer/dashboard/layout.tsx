@@ -1,7 +1,7 @@
-import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { redirect } from "next/navigation";
 import { getCustomerUser } from "@/lib/customer/utils";
+import { CustomerHeader } from "@/components/dashboard/customer-header";
 
 export default async function CustomerDashboardLayout({
   children,
@@ -17,7 +17,7 @@ export default async function CustomerDashboardLayout({
 
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      <SiteHeader />
+      <CustomerHeader user={user} />
       <div className="flex-1 container mx-auto px-4 py-8">{children}</div>
       <SiteFooter />
     </div>

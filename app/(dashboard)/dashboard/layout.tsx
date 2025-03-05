@@ -20,7 +20,9 @@ import {
   Activity,
   Cog,
   ChevronRight,
+  LogOut,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // Componente de Breadcrumb
 function Breadcrumb() {
@@ -206,6 +208,16 @@ export default function DashboardLayout({
             >
               Configurações
             </Link>
+            <Link href="/api/auth/logout">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-gray-900"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
@@ -287,25 +299,18 @@ export default function DashboardLayout({
                 ))}
               </div>
             </div>
+            <div className="border-t border-gray-200 pt-4 mt-auto">
+              <Link
+                href="/api/auth/logout"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:text-red-800 transition-all"
+              >
+                <LogOut className="h-4 w-4" />
+                Sair da conta
+              </Link>
+            </div>
           </nav>
         </div>
         <div className="flex flex-1 flex-col">
-          {/* Desktop header */}
-          <div className="hidden border-b lg:block">
-            <div className="flex h-16 items-center px-4">
-              <Link href="/" className="flex items-center mr-4">
-                <span className="text-xl font-bold">Tudo Fresco</span>
-              </Link>
-              <div className="ml-auto flex items-center space-x-4">
-                <Link
-                  href="/dashboard/settings"
-                  className="text-sm font-medium transition-colors hover:text-primary"
-                >
-                  Configurações
-                </Link>
-              </div>
-            </div>
-          </div>
           <main className="flex-1 p-4 md:p-6">
             <Breadcrumb />
             {children}

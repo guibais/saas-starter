@@ -12,6 +12,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cookies } from "next/headers";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { AlertCircle } from "lucide-react";
 
 // Function to get the customer user
 async function getCustomerUser() {
@@ -34,6 +37,68 @@ async function getCustomerUser() {
   }
 }
 
+// Function to get customer orders
+async function getCustomerOrders(customerId: number) {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/orders/customer/${customerId}?limit=20`,
+      {
+        cache: "no-store",
+        headers: {
+          Cookie: cookies().toString(),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Error fetching orders: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching customer orders:", error);
+    return { orders: [] };
+  }
+}
+
+// Function to get customer subscription for next delivery
+async function getCustomerSubscription(customerId: number) {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/subscriptions/customer/${customerId}`,
+      {
+        cache: "no-store",
+        headers: {
+          Cookie: cookies().toString(),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // No subscription found
+      }
+      throw new Error(`Error fetching subscription: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching customer subscription:", error);
+    return null;
+  }
+}
+
+// Format date helper
+function formatDate(dateString: string | null) {
+  if (!dateString) return "N/A";
+  try {
+    return format(new Date(dateString), "dd/MM/yyyy", { locale: ptBR });
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return dateString;
+  }
+}
+
 export default async function HistoryPage() {
   const user = await getCustomerUser();
 
@@ -41,61 +106,8 @@ export default async function HistoryPage() {
     redirect("/customer/login");
   }
 
-  // Mock delivery history data - in a real app, this would come from your database
-  const deliveries = [
-    {
-      id: "del_123456",
-      date: "01/03/2024",
-      status: "delivered",
-      items: [
-        { name: "Maçã Fuji", quantity: 5 },
-        { name: "Banana Prata", quantity: 8 },
-        { name: "Uva Thompson", quantity: 500, unit: "g" },
-        { name: "Manga Palmer", quantity: 2 },
-        { name: "Abacaxi Pérola", quantity: 1 },
-      ],
-      trackingCode: "BR123456789",
-    },
-    {
-      id: "del_123455",
-      date: "15/02/2024",
-      status: "delivered",
-      items: [
-        { name: "Maçã Fuji", quantity: 5 },
-        { name: "Banana Prata", quantity: 8 },
-        { name: "Uva Thompson", quantity: 500, unit: "g" },
-        { name: "Manga Palmer", quantity: 2 },
-        { name: "Abacaxi Pérola", quantity: 1 },
-      ],
-      trackingCode: "BR123456788",
-    },
-    {
-      id: "del_123454",
-      date: "01/02/2024",
-      status: "delivered",
-      items: [
-        { name: "Maçã Fuji", quantity: 5 },
-        { name: "Banana Prata", quantity: 8 },
-        { name: "Uva Thompson", quantity: 500, unit: "g" },
-        { name: "Manga Palmer", quantity: 2 },
-        { name: "Abacaxi Pérola", quantity: 1 },
-      ],
-      trackingCode: "BR123456787",
-    },
-    {
-      id: "del_123453",
-      date: "15/01/2024",
-      status: "delivered",
-      items: [
-        { name: "Maçã Fuji", quantity: 5 },
-        { name: "Banana Prata", quantity: 8 },
-        { name: "Uva Thompson", quantity: 500, unit: "g" },
-        { name: "Manga Palmer", quantity: 2 },
-        { name: "Abacaxi Pérola", quantity: 1 },
-      ],
-      trackingCode: "BR123456786",
-    },
-  ];
+  const { orders = [] } = await getCustomerOrders(user.id);
+  const subscription = await getCustomerSubscription(user.id);
 
   return (
     <div className="space-y-6">
@@ -111,49 +123,77 @@ export default async function HistoryPage() {
           <CardTitle>Suas Entregas</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Código de Rastreio</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deliveries.map((delivery) => (
-                <TableRow key={delivery.id}>
-                  <TableCell className="font-medium">{delivery.id}</TableCell>
-                  <TableCell>{delivery.date}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        delivery.status === "delivered"
-                          ? "default"
-                          : "destructive"
-                      }
-                      className={
-                        delivery.status === "delivered" ? "bg-green-500" : ""
-                      }
-                    >
-                      {delivery.status === "delivered"
-                        ? "Entregue"
-                        : "Pendente"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{delivery.trackingCode}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/customer/dashboard/history/${delivery.id}`}>
-                        Detalhes
-                      </Link>
-                    </Button>
-                  </TableCell>
+          {orders.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Endereço</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {orders.map((order: any) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">#{order.id}</TableCell>
+                    <TableCell>{formatDate(order.createdAt)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          order.status === "delivered"
+                            ? "default"
+                            : order.status === "cancelled"
+                            ? "destructive"
+                            : "outline"
+                        }
+                        className={
+                          order.status === "delivered"
+                            ? "bg-green-500"
+                            : order.status === "processing"
+                            ? "bg-blue-500"
+                            : order.status === "shipped"
+                            ? "bg-purple-500"
+                            : ""
+                        }
+                      >
+                        {order.status === "delivered"
+                          ? "Entregue"
+                          : order.status === "processing"
+                          ? "Em processamento"
+                          : order.status === "shipped"
+                          ? "Enviado"
+                          : order.status === "cancelled"
+                          ? "Cancelado"
+                          : order.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="truncate max-w-[200px]">
+                      {order.shippingAddress}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/customer/dashboard/orders/${order.id}`}>
+                          Detalhes
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10">
+              <AlertCircle className="h-12 w-12 text-gray-400 mb-4" />
+              <p className="text-gray-500 text-center">
+                Você ainda não tem nenhum pedido ou entrega.
+              </p>
+              <Button variant="outline" className="mt-6" asChild>
+                <Link href="/products">Ver Produtos</Link>
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -162,16 +202,30 @@ export default async function HistoryPage() {
           <CardTitle>Próximas Entregas</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8">
-            <p className="text-gray-500">
-              Sua próxima entrega está agendada para 15/03/2024.
-            </p>
-            <Button variant="outline" className="mt-4" asChild>
-              <Link href="/customer/dashboard/subscription">
-                Ver Detalhes da Assinatura
-              </Link>
-            </Button>
-          </div>
+          {subscription && subscription.status === "ACTIVE" ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">
+                Sua próxima entrega está agendada para{" "}
+                {formatDate(subscription.nextDeliveryDate)}.
+              </p>
+              <Button variant="outline" className="mt-4" asChild>
+                <Link href="/customer/dashboard/subscription">
+                  Ver Detalhes da Assinatura
+                </Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center py-8 flex flex-col items-center">
+              <AlertCircle className="h-12 w-12 text-yellow-500 mb-4" />
+              <p className="text-gray-500">
+                Você não possui assinaturas ativas para receber entregas
+                regulares.
+              </p>
+              <Button variant="default" className="mt-4" asChild>
+                <Link href="/plans">Ver Planos Disponíveis</Link>
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
