@@ -79,13 +79,26 @@ export default function OrdersPage() {
     const fetchOrders = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch("/api/orders");
+        console.log("Buscando todos os pedidos (admin)");
+        const response = await fetch("/api/orders?all=true");
+
         if (!response.ok) {
-          throw new Error("Falha ao carregar pedidos");
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Erro na resposta da API:", {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+          });
+          throw new Error(
+            `Falha ao carregar pedidos: ${response.status} ${response.statusText}`
+          );
         }
+
         const data = await response.json();
+        console.log(`Recebidos ${data.length} pedidos`);
         setOrders(data);
       } catch (err) {
+        console.error("Erro na requisição:", err);
         setError(err instanceof Error ? err.message : "Erro desconhecido");
         toast({
           title: "Erro",

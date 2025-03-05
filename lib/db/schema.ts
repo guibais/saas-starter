@@ -236,6 +236,41 @@ export const cartItems = pgTable("cart_items", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const paymentMethods = pgTable("payment_methods", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => customers.id, { onDelete: "cascade" }),
+  type: varchar("type", { length: 50 }).notNull(),
+  lastFourDigits: varchar("last_four_digits", { length: 4 }),
+  expiryDate: varchar("expiry_date", { length: 10 }),
+  holderName: varchar("holder_name", { length: 255 }),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => customers.id, { onDelete: "cascade" }),
+  subscriptionId: integer("subscription_id").references(
+    () => userSubscriptions.id,
+    { onDelete: "set null" }
+  ),
+  paymentMethodId: integer("payment_method_id").references(
+    () => paymentMethods.id,
+    { onDelete: "set null" }
+  ),
+  amount: varchar("amount", { length: 50 }).notNull(),
+  currency: varchar("currency", { length: 10 }).notNull().default("BRL"),
+  status: varchar("status", { length: 50 }).notNull(),
+  paymentDate: timestamp("payment_date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const teamsRelations = relations(teams, ({ many }) => ({
   teamMembers: many(teamMembers),
   activityLogs: many(activityLogs),
@@ -253,6 +288,8 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const customersRelations = relations(customers, ({ many }) => ({
   orders: many(orders),
   userSubscriptions: many(userSubscriptions),
+  paymentMethods: many(paymentMethods),
+  payments: many(payments),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
@@ -317,6 +354,7 @@ export const userSubscriptionsRelations = relations(
       references: [subscriptionPlans.id],
     }),
     subscriptionItems: many(subscriptionItems),
+    payments: many(payments),
   })
 );
 
@@ -334,6 +372,28 @@ export const cartsRelations = relations(carts, ({ one, many }) => ({
     references: [users.id],
   }),
   cartItems: many(cartItems),
+}));
+
+export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
+  user: one(customers, {
+    fields: [paymentMethods.userId],
+    references: [customers.id],
+  }),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  user: one(customers, {
+    fields: [payments.userId],
+    references: [customers.id],
+  }),
+  subscription: one(userSubscriptions, {
+    fields: [payments.subscriptionId],
+    references: [userSubscriptions.id],
+  }),
+  paymentMethod: one(paymentMethods, {
+    fields: [payments.paymentMethodId],
+    references: [paymentMethods.id],
+  }),
 }));
 
 export type User = typeof users.$inferSelect;
@@ -389,3 +449,7 @@ export type Cart = typeof carts.$inferSelect;
 export type NewCart = typeof carts.$inferInsert;
 export type CartItem = typeof cartItems.$inferSelect;
 export type NewCartItem = typeof cartItems.$inferInsert;
+export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type NewPaymentMethod = typeof paymentMethods.$inferInsert;
+export type Payment = typeof payments.$inferSelect;
+export type NewPayment = typeof payments.$inferInsert;

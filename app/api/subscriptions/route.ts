@@ -1,15 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/drizzle";
-import { userSubscriptions, users, subscriptionPlans } from "@/lib/db/schema";
+import {
+  userSubscriptions,
+  customers,
+  subscriptionPlans,
+} from "@/lib/db/schema";
 import { getSession } from "@/lib/auth/session";
 import { desc, eq, like, or } from "drizzle-orm";
 
 // GET /api/subscriptions - Listar todas as assinaturas
 export async function GET(request: NextRequest) {
   try {
+    console.log("Iniciando busca de assinaturas");
+
     // Verificar autenticação
     const session = await getSession();
+    console.log(
+      "Sessão:",
+      session
+        ? {
+            userId: session.user.id,
+            role: session.user.role,
+            expires: session.expires,
+          }
+        : "Nenhuma sessão encontrada"
+    );
+
     if (!session || session.user.role !== "admin") {
+      console.log("Erro de autenticação:", {
+        hasSession: !!session,
+        role: session?.user?.role,
+      });
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
@@ -24,53 +45,73 @@ export async function GET(request: NextRequest) {
       ? parseInt(searchParams.get("offset")!)
       : 0;
 
+    console.log("Parâmetros de busca:", { search, status, limit, offset });
+
     // Buscar assinaturas com informações do usuário e plano
-    const subscriptionsList = await db
-      .select({
-        id: userSubscriptions.id,
-        userId: userSubscriptions.userId,
-        planId: userSubscriptions.planId,
-        status: userSubscriptions.status,
-        startDate: userSubscriptions.startDate,
-        nextDeliveryDate: userSubscriptions.nextDeliveryDate,
-        createdAt: userSubscriptions.createdAt,
-        userName: users.name,
-        userEmail: users.email,
-        planName: subscriptionPlans.name,
-        price: subscriptionPlans.price,
-      })
-      .from(userSubscriptions)
-      .leftJoin(users, eq(userSubscriptions.userId, users.id))
-      .leftJoin(
-        subscriptionPlans,
-        eq(userSubscriptions.planId, subscriptionPlans.id)
-      )
-      .orderBy(desc(userSubscriptions.createdAt))
-      .limit(limit)
-      .offset(offset);
+    try {
+      console.log("Executando consulta de assinaturas no banco de dados");
+      const subscriptionsList = await db
+        .select({
+          id: userSubscriptions.id,
+          userId: userSubscriptions.customerId,
+          planId: userSubscriptions.planId,
+          status: userSubscriptions.status,
+          startDate: userSubscriptions.startDate,
+          nextDeliveryDate: userSubscriptions.nextDeliveryDate,
+          createdAt: userSubscriptions.createdAt,
+          userName: customers.name,
+          userEmail: customers.email,
+          planName: subscriptionPlans.name,
+          price: subscriptionPlans.price,
+        })
+        .from(userSubscriptions)
+        .leftJoin(customers, eq(userSubscriptions.customerId, customers.id))
+        .leftJoin(
+          subscriptionPlans,
+          eq(userSubscriptions.planId, subscriptionPlans.id)
+        )
+        .orderBy(desc(userSubscriptions.createdAt))
+        .limit(limit)
+        .offset(offset);
 
-    // Filtrar os resultados na aplicação
-    let filteredSubscriptions = subscriptionsList;
+      console.log(`Encontradas ${subscriptionsList.length} assinaturas`);
 
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredSubscriptions = filteredSubscriptions.filter(
-        (subscription) =>
-          subscription.userName?.toLowerCase().includes(searchLower) ||
-          subscription.userEmail?.toLowerCase().includes(searchLower) ||
-          subscription.planName?.toLowerCase().includes(searchLower)
+      // Filtrar os resultados na aplicação
+      let filteredSubscriptions = subscriptionsList;
+
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredSubscriptions = filteredSubscriptions.filter(
+          (subscription) =>
+            subscription.userName?.toLowerCase().includes(searchLower) ||
+            subscription.userEmail?.toLowerCase().includes(searchLower) ||
+            subscription.planName?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      if (status) {
+        filteredSubscriptions = filteredSubscriptions.filter(
+          (subscription) => subscription.status === status
+        );
+      }
+
+      console.log(
+        `Retornando ${filteredSubscriptions.length} assinaturas após filtros`
+      );
+      return NextResponse.json(filteredSubscriptions);
+    } catch (dbError) {
+      console.error("Erro ao consultar banco de dados:", dbError);
+      throw new Error(
+        `Erro ao consultar banco de dados: ${
+          dbError instanceof Error ? dbError.message : String(dbError)
+        }`
       );
     }
-
-    if (status) {
-      filteredSubscriptions = filteredSubscriptions.filter(
-        (subscription) => subscription.status === status
-      );
-    }
-
-    return NextResponse.json(filteredSubscriptions);
   } catch (error) {
     console.error("Erro ao buscar assinaturas:", error);
+    if (error instanceof Error) {
+      console.error("Detalhes do erro:", error.stack);
+    }
     return NextResponse.json(
       { error: "Erro ao buscar assinaturas" },
       { status: 500 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,9 +30,37 @@ const checkoutFormSchema = z.object({
   email: z.string().email("Email inválido"),
   phone: z.string().min(10, "Telefone inválido"),
   address: z.string().min(10, "Endereço deve ser completo"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  password: z
+    .string()
+    .min(6, "Senha deve ter pelo menos 6 caracteres")
+    .optional(),
   deliveryInstructions: z.string().optional(),
+  // Campos de cartão de crédito
+  cardNumber: z
+    .string()
+    .min(13, "Número do cartão inválido")
+    .max(19, "Número do cartão inválido"),
+  cardName: z
+    .string()
+    .min(3, "Nome no cartão deve ter pelo menos 3 caracteres"),
+  cardExpiry: z
+    .string()
+    .regex(
+      /^(0[1-9]|1[0-2])\/([0-9]{2})$/,
+      "Data de validade inválida (MM/AA)"
+    ),
+  cardCvc: z.string().min(3, "CVC inválido").max(4, "CVC inválido"),
 });
+
+// Função para criar o esquema de validação com base no estado de autenticação
+const createValidationSchema = (isAuthenticated: boolean) => {
+  return isAuthenticated
+    ? checkoutFormSchema
+    : checkoutFormSchema.refine((data) => !!data.password, {
+        message: "Senha é obrigatória para criar uma conta",
+        path: ["password"],
+      });
+};
 
 type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
 
@@ -95,7 +123,7 @@ export default function SubscriptionCheckoutPage() {
 
   // Form with validation
   const form = useForm<CheckoutFormValues>({
-    resolver: zodResolver(checkoutFormSchema),
+    resolver: zodResolver(createValidationSchema(isAuthenticated)),
     defaultValues: {
       name: "",
       email: "",
@@ -103,46 +131,41 @@ export default function SubscriptionCheckoutPage() {
       address: "",
       password: "",
       deliveryInstructions: "",
+      cardNumber: "",
+      cardName: "",
+      cardExpiry: "",
+      cardCvc: "",
     },
+    mode: "onChange", // Validar ao alterar os campos
   });
 
   // Fetch selected plan based on query parameter
   useEffect(() => {
     const fetchSelectedPlan = async () => {
       try {
-        setIsLoading(true);
-
-        // Get plan slug from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const planSlug = urlParams.get("plan");
+        // Get plan ID from query parameter
+        const searchParams = new URLSearchParams(window.location.search);
+        const planSlug = searchParams.get("plan");
 
         if (!planSlug) {
           setError("Nenhum plano selecionado");
+          setIsLoading(false);
           return;
         }
 
-        // Fetch plan details
+        // Fetch plan details from API
         const response = await fetch(`/api/plans/slug/${planSlug}`);
-
         if (!response.ok) {
-          throw new Error("Falha ao carregar o plano");
+          throw new Error("Falha ao carregar detalhes do plano");
         }
 
-        const planData = await response.json();
-        console.log("Plan data loaded:", planData);
-
-        // Check if fixedItems exists and has data
-        if (planData.fixedItems) {
-          console.log("Fixed items:", planData.fixedItems);
-        } else {
-          console.log("No fixed items found in plan data");
-        }
-
-        setSelectedPlan(planData);
+        const data = await response.json();
+        setSelectedPlan(data);
+        console.log("Plano selecionado carregado:", data);
+        setIsLoading(false);
       } catch (error) {
-        console.error("Erro ao buscar plano:", error);
-        setError("Erro ao carregar o plano selecionado");
-      } finally {
+        console.error("Erro ao carregar plano:", error);
+        setError("Erro ao carregar detalhes do plano");
         setIsLoading(false);
       }
     };
@@ -150,29 +173,25 @@ export default function SubscriptionCheckoutPage() {
     fetchSelectedPlan();
   }, []);
 
-  // Check authentication and load user data
+  // Check if user is authenticated and fill form with user data
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Check if user is authenticated
-        const authResponse = await fetch("/api/customer/check-auth");
-        const authData = await authResponse.json();
+        const response = await fetch("/api/customer/check-auth");
+        const data = await response.json();
 
-        if (authData.authenticated) {
-          // Fetch user data
-          const userResponse = await fetch("/api/customer/user");
-          const userData = await userResponse.json();
+        console.log("Verificação de autenticação:", data);
 
-          if (userData) {
-            setIsAuthenticated(true);
-            setUserData(userData);
+        if (data.authenticated) {
+          const userData = data.user;
+          setIsAuthenticated(true);
+          setUserData(userData);
 
-            // Fill form with user data
-            form.setValue("name", userData.name || "");
-            form.setValue("email", userData.email || "");
-            form.setValue("phone", userData.phone || "");
-            form.setValue("address", userData.address || "");
-          }
+          // Fill form with user data
+          form.setValue("name", userData.name || "");
+          form.setValue("email", userData.email || "");
+          form.setValue("phone", userData.phone || "");
+          form.setValue("address", userData.address || "");
         } else {
           setIsAuthenticated(false);
           setUserData(null);
@@ -190,7 +209,7 @@ export default function SubscriptionCheckoutPage() {
   }, [selectedPlan, form]);
 
   // Calculate total price (plan price + customizable items)
-  const calculateTotal = () => {
+  const calculateTotal = useMemo(() => {
     if (!selectedPlan) return 0;
 
     const planPrice = parseFloat(selectedPlan.price);
@@ -203,17 +222,32 @@ export default function SubscriptionCheckoutPage() {
     });
 
     return planPrice + customizationTotal;
-  };
+  }, [selectedPlan, getCustomizationTotal]);
 
   // Handle form submission
   const onSubmit = async (data: CheckoutFormValues) => {
+    console.log("onSubmit iniciado com dados:", data);
+    console.log("Estado de autenticação:", isAuthenticated);
+
     if (!selectedPlan) {
+      console.error("Erro: Nenhum plano selecionado");
       setError("Nenhum plano selecionado");
+      return;
+    }
+
+    // Verificar se o usuário não está autenticado e não forneceu senha
+    if (!isAuthenticated && !data.password) {
+      console.error("Erro: Senha obrigatória para criar conta");
+      form.setError("password", {
+        type: "manual",
+        message: "Senha obrigatória para criar conta",
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
+      console.log("Estado isSubmitting definido como true");
 
       // Prepare checkout data
       const checkoutData = {
@@ -224,49 +258,90 @@ export default function SubscriptionCheckoutPage() {
           email: data.email,
           phone: data.phone,
           address: data.address,
-          password: data.password,
+          password: isAuthenticated ? undefined : data.password,
           deliveryInstructions: data.deliveryInstructions,
+        },
+        paymentDetails: {
+          cardNumber: data.cardNumber,
+          cardName: data.cardName,
+          cardExpiry: data.cardExpiry,
+          cardCvc: data.cardCvc,
         },
         createAccount: !isAuthenticated,
       };
 
       // Send checkout request
-      const response = await fetch("/api/checkout/subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      console.log("Enviando dados para checkout:", {
+        planId: checkoutData.planId,
+        customizableItems: checkoutData.customizableItems,
+        createAccount: checkoutData.createAccount,
+        hasPaymentDetails: !!checkoutData.paymentDetails,
+        userDetails: {
+          ...checkoutData.userDetails,
+          hasPassword: !!checkoutData.userDetails.password,
         },
-        body: JSON.stringify(checkoutData),
+        isAuthenticated,
       });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.error || "Erro ao processar o checkout");
-      }
-
-      // Handle successful checkout
-      if (responseData.success) {
-        // Clear customization
-        useSubscriptionStore.getState().clearCustomization();
-
-        // Show success message
-        setSuccessMessage({
-          title: "Assinatura realizada com sucesso!",
-          message:
-            "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
-          primaryAction: {
-            label: "Ver minhas assinaturas",
-            href: "/customer/subscriptions",
-          },
-          secondaryAction: {
-            label: "Voltar para a página inicial",
-            href: "/",
-          },
+      try {
+        console.log("Iniciando requisição para a API");
+        const response = await fetch(
+          "/api/checkout/subscription/process-payment",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(checkoutData),
+          }
+        );
+        console.log("Resposta da API recebida:", {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
         });
-      } else if (responseData.redirectUrl) {
-        // Redirect to payment page if needed
-        window.location.href = responseData.redirectUrl;
+
+        const responseData = await response.json();
+        console.log("Dados da resposta da API:", responseData);
+
+        if (!response.ok) {
+          console.error("Erro na resposta da API:", {
+            status: response.status,
+            statusText: response.statusText,
+            data: responseData,
+          });
+          throw new Error(responseData.error || "Erro ao processar o checkout");
+        }
+
+        // Handle successful checkout
+        if (responseData.success) {
+          // Clear customization
+          useSubscriptionStore.getState().clearCustomization();
+
+          // Show success message
+          setSuccessMessage({
+            title: "Assinatura realizada com sucesso!",
+            message:
+              "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
+            primaryAction: {
+              label: "Ver minhas assinaturas",
+              href: "/customer/dashboard/subscription",
+            },
+            secondaryAction: {
+              label: "Voltar para a página inicial",
+              href: "/",
+            },
+          });
+        }
+      } catch (error) {
+        console.error("Erro no checkout:", error);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro ao processar sua assinatura"
+        );
+      } finally {
+        setIsSubmitting(false);
       }
     } catch (error) {
       console.error("Erro no checkout:", error);
@@ -275,8 +350,6 @@ export default function SubscriptionCheckoutPage() {
           ? error.message
           : "Ocorreu um erro ao processar sua assinatura"
       );
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -349,7 +422,41 @@ export default function SubscriptionCheckoutPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault(); // Prevenir o comportamento padrão
+                console.log("Form submit event triggered");
+                console.log("Form validation state:", form.formState);
+                console.log("Form errors:", form.formState.errors);
+                console.log("Form values:", form.getValues());
+
+                // Verificar se o formulário é válido
+                const isValid = form.formState.isValid;
+                console.log("Formulário é válido?", isValid);
+
+                if (isValid) {
+                  console.log("Formulário válido, prosseguindo com o envio");
+                  form.handleSubmit(onSubmit)(e);
+                } else {
+                  console.error("Formulário inválido. Corrigindo erros...");
+                  // Trigger validation manually
+                  form.trigger().then((isValid) => {
+                    console.log("Resultado da validação manual:", isValid);
+                    console.log(
+                      "Erros após validação manual:",
+                      form.formState.errors
+                    );
+                    if (isValid) {
+                      console.log(
+                        "Formulário agora é válido, prosseguindo com o envio"
+                      );
+                      form.handleSubmit(onSubmit)(e);
+                    }
+                  });
+                }
+              }}
+              className="space-y-6"
+            >
               <Card>
                 <CardHeader>
                   <CardTitle>Informações Pessoais</CardTitle>
@@ -484,11 +591,80 @@ export default function SubscriptionCheckoutPage() {
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardHeader>
+                  <CardTitle>Informações de Pagamento</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="cardName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome no Cartão</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Nome como está no cartão"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="cardNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número do Cartão</FormLabel>
+                        <FormControl>
+                          <Input placeholder="0000 0000 0000 0000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="cardExpiry"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data de Validade</FormLabel>
+                          <FormControl>
+                            <Input placeholder="MM/AA" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="cardCvc"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CVC</FormLabel>
+                          <FormControl>
+                            <Input placeholder="123" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
               <div className="flex flex-col gap-4">
                 <Button
                   type="submit"
                   className="w-full"
                   disabled={isSubmitting}
+                  onClick={() => console.log("Submit button clicked")}
                 >
                   {isSubmitting ? (
                     <>
@@ -499,6 +675,28 @@ export default function SubscriptionCheckoutPage() {
                     "Finalizar Assinatura"
                   )}
                 </Button>
+
+                {process.env.NODE_ENV === "development" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      console.log("Estado do formulário:", {
+                        values: form.getValues(),
+                        errors: form.formState.errors,
+                        isValid: form.formState.isValid,
+                        isDirty: form.formState.isDirty,
+                        isSubmitting: form.formState.isSubmitting,
+                        isAuthenticated,
+                        selectedPlan,
+                        customizableItems,
+                      });
+                    }}
+                  >
+                    Depurar Formulário
+                  </Button>
+                )}
               </div>
             </form>
           </Form>
@@ -587,7 +785,7 @@ export default function SubscriptionCheckoutPage() {
 
               <div className="flex justify-between font-bold">
                 <span>Total:</span>
-                <span>R$ {calculateTotal().toFixed(2).replace(".", ",")}</span>
+                <span>R$ {calculateTotal.toFixed(2).replace(".", ",")}</span>
               </div>
             </CardContent>
           </Card>

@@ -58,19 +58,21 @@ function Breadcrumb() {
           return null;
         }
 
+        // Construir o href para o segmento atual
         const href = `/${segments.slice(0, index + 2).join("/")}`;
         const isLast = index === segments.slice(1).length - 1;
+
+        // Verificar se estamos na seção admin e aplicar estilos/links especiais
+        const linkText = segmentNames[segment] || segment;
 
         return (
           <div key={segment} className="flex items-center whitespace-nowrap">
             <ChevronRight className="h-4 w-4 mx-1 flex-shrink-0" />
             {isLast ? (
-              <span className="font-medium text-gray-900">
-                {segmentNames[segment] || segment}
-              </span>
+              <span className="font-medium text-gray-900">{linkText}</span>
             ) : (
               <Link href={href} className="hover:text-gray-900">
-                {segmentNames[segment] || segment}
+                {linkText}
               </Link>
             )}
           </div>

@@ -87,13 +87,26 @@ export default function SubscriptionsPage() {
       setIsLoading(true);
       setError(null);
       try {
+        console.log("Buscando assinaturas...");
         const response = await fetch("/api/subscriptions");
+
         if (!response.ok) {
-          throw new Error("Falha ao carregar assinaturas");
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Erro na resposta da API:", {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+          });
+          throw new Error(
+            `Falha ao carregar assinaturas: ${response.status} ${response.statusText}`
+          );
         }
+
         const data = await response.json();
+        console.log(`Recebidas ${data.length} assinaturas`);
         setSubscriptions(data);
       } catch (err) {
+        console.error("Erro na requisição:", err);
         setError(err instanceof Error ? err.message : "Erro desconhecido");
         toast.error("Não foi possível carregar as assinaturas");
       } finally {
@@ -372,14 +385,16 @@ export default function SubscriptionsPage() {
           />
         </div>
         <Select
-          value={statusFilter || ""}
-          onValueChange={(value) => setStatusFilter(value || null)}
+          value={statusFilter || "all"}
+          onValueChange={(value) =>
+            setStatusFilter(value === "all" ? null : value)
+          }
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filtrar por status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos os Status</SelectItem>
+            <SelectItem value="all">Todos os Status</SelectItem>
             <SelectItem value="active">Ativas</SelectItem>
             <SelectItem value="paused">Pausadas</SelectItem>
             <SelectItem value="cancelled">Canceladas</SelectItem>
