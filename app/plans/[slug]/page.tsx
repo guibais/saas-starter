@@ -98,7 +98,6 @@ export default function PlanDetailPage({
     isCustomizationValid,
     getValidationErrors,
     setCustomizationRules,
-    clearCustomization,
   } = useSubscriptionStore();
 
   // Buscar detalhes do plano
@@ -148,12 +147,7 @@ export default function PlanDetailPage({
     };
 
     fetchPlanDetails();
-
-    // Limpar customização ao sair da página
-    return () => {
-      clearCustomization();
-    };
-  }, [slug, setSelectedPlan, setCustomizationRules, clearCustomization]);
+  }, [slug, setSelectedPlan, setCustomizationRules]);
 
   const handleAddToCustomization = (product: Product) => {
     addCustomizationItem(product as any, 1);

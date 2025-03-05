@@ -4,6 +4,7 @@ import {
   Product,
   SubscriptionPlan,
   PlanCustomizableItem,
+  PlanFixedItem,
 } from "@/lib/db/schema";
 
 export type CustomizationItem = {
@@ -11,11 +12,16 @@ export type CustomizationItem = {
   quantity: number;
 };
 
+// Extended SubscriptionPlan type with fixedItems
+export type ExtendedSubscriptionPlan = SubscriptionPlan & {
+  fixedItems?: Array<PlanFixedItem & { product: Product }>;
+};
+
 type SubscriptionState = {
-  selectedPlan: SubscriptionPlan | null;
+  selectedPlan: ExtendedSubscriptionPlan | null;
   customizableItems: CustomizationItem[];
   customizationRules: PlanCustomizableItem[];
-  setSelectedPlan: (plan: SubscriptionPlan | null) => void;
+  setSelectedPlan: (plan: ExtendedSubscriptionPlan | null) => void;
   setCustomizationRules: (rules: PlanCustomizableItem[]) => void;
   addCustomizationItem: (product: Product, quantity: number) => void;
   removeCustomizationItem: (productId: number) => void;
@@ -115,11 +121,30 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       },
 
       isCustomizationValid: () => {
-        const { customizationRules, getCustomizationItemCount } = get();
+        const { customizationRules, getCustomizationItemCount, selectedPlan } =
+          get();
+
+        // If there are no customization rules, the customization is valid
+        if (!customizationRules.length) {
+          return true;
+        }
 
         for (const rule of customizationRules) {
           const count = getCustomizationItemCount(rule.productType);
-          if (count < rule.minQuantity || count > rule.maxQuantity) {
+
+          // Get fixed items count for this product type
+          let fixedItemsCount = 0;
+          if (selectedPlan?.fixedItems && selectedPlan.fixedItems.length > 0) {
+            fixedItemsCount = selectedPlan.fixedItems
+              .filter((item) => item.product.productType === rule.productType)
+              .reduce((total, item) => total + item.quantity, 0);
+          }
+
+          // Total count is the sum of customizable items and fixed items
+          const totalCount = count + fixedItemsCount;
+
+          // Check if the total count meets the rule requirements
+          if (totalCount < rule.minQuantity || totalCount > rule.maxQuantity) {
             return false;
           }
         }
@@ -128,27 +153,39 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       },
 
       getValidationErrors: () => {
-        const { customizationRules, getCustomizationItemCount } = get();
+        const { customizationRules, getCustomizationItemCount, selectedPlan } =
+          get();
         const errors: string[] = [];
 
         for (const rule of customizationRules) {
           const count = getCustomizationItemCount(rule.productType);
 
-          if (count < rule.minQuantity) {
+          // Get fixed items count for this product type
+          let fixedItemsCount = 0;
+          if (selectedPlan?.fixedItems && selectedPlan.fixedItems.length > 0) {
+            fixedItemsCount = selectedPlan.fixedItems
+              .filter((item) => item.product.productType === rule.productType)
+              .reduce((total, item) => total + item.quantity, 0);
+          }
+
+          // Total count is the sum of customizable items and fixed items
+          const totalCount = count + fixedItemsCount;
+
+          if (totalCount < rule.minQuantity) {
             errors.push(
               `Você precisa selecionar pelo menos ${
-                rule.minQuantity
-              } frutas do tipo ${
+                rule.minQuantity - fixedItemsCount
+              } frutas adicionais do tipo ${
                 rule.productType === "normal" ? "comum" : "exótica"
               }.`
             );
           }
 
-          if (count > rule.maxQuantity) {
+          if (totalCount > rule.maxQuantity) {
             errors.push(
               `Você pode selecionar no máximo ${
-                rule.maxQuantity
-              } frutas do tipo ${
+                rule.maxQuantity - fixedItemsCount
+              } frutas adicionais do tipo ${
                 rule.productType === "normal" ? "comum" : "exótica"
               }.`
             );

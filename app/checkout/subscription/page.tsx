@@ -19,36 +19,32 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, Check, Loader2, ShoppingCart } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useSubscriptionStore } from "@/lib/state/subscriptionStore";
-import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Esquema de validação para o formulário de checkout
+// Schema de validação para o formulário
 const checkoutFormSchema = z.object({
   name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
   email: z.string().email("Email inválido"),
-  phone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
-  address: z.string().min(10, "Endereço deve ter pelo menos 10 caracteres"),
+  phone: z.string().min(10, "Telefone inválido"),
+  address: z.string().min(10, "Endereço deve ser completo"),
+  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   deliveryInstructions: z.string().optional(),
-  password: z
-    .string()
-    .min(6, "A senha deve ter pelo menos 6 caracteres")
-    .optional(),
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
 
-// Interface para os itens fixos do plano
 interface FixedItem {
   id: number;
   product: {
     name: string;
+    productType?: string;
   };
   quantity: number;
 }
 
-// Interface para o plano selecionado - ajustada para corresponder ao objeto real
 interface SelectedPlan {
   id: number;
   name: string;
@@ -60,7 +56,8 @@ interface SelectedPlan {
   stripePriceId: string | null;
   createdAt: Date;
   updatedAt: Date;
-  fixedItems?: FixedItem[]; // Tornando opcional para evitar erros
+  fixedItems?: FixedItem[];
+  customizableRules?: any[];
 }
 
 interface CustomizableItem {
@@ -68,6 +65,7 @@ interface CustomizableItem {
     id: number;
     name: string;
     price: string;
+    productType?: string;
   };
   quantity: number;
 }
@@ -78,28 +76,24 @@ export default function SubscriptionCheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userData, setUserData] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
-  const [customizableItems, setCustomizableItems] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<{
     title: string;
     message: string;
-    primaryAction: {
-      label: string;
-      href: string;
-    };
-    secondaryAction: {
-      label: string;
-      href: string;
-    };
+    primaryAction: { label: string; href: string };
+    secondaryAction: { label: string; href: string };
   } | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { getCustomizationTotal, isCustomizationValid, clearCustomization } =
-    useSubscriptionStore();
+  // Get customizable items from store
+  const { customizableItems, getCustomizationTotal } = useSubscriptionStore();
 
-  // Formulário com validação
+  // Log customizable items for debugging
+  useEffect(() => {
+    console.log("Customizable items in checkout:", customizableItems);
+  }, [customizableItems]);
+
+  // Form with validation
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: {
@@ -112,13 +106,13 @@ export default function SubscriptionCheckoutPage() {
     },
   });
 
-  // Buscar o plano selecionado com base no parâmetro de query
+  // Fetch selected plan based on query parameter
   useEffect(() => {
     const fetchSelectedPlan = async () => {
       try {
         setIsLoading(true);
 
-        // Obter o slug do plano da URL
+        // Get plan slug from URL
         const urlParams = new URLSearchParams(window.location.search);
         const planSlug = urlParams.get("plan");
 
@@ -127,7 +121,7 @@ export default function SubscriptionCheckoutPage() {
           return;
         }
 
-        // Buscar detalhes do plano
+        // Fetch plan details
         const response = await fetch(`/api/plans/slug/${planSlug}`);
 
         if (!response.ok) {
@@ -135,15 +129,16 @@ export default function SubscriptionCheckoutPage() {
         }
 
         const planData = await response.json();
-        setSelectedPlan(planData);
+        console.log("Plan data loaded:", planData);
 
-        // Inicializar os itens customizáveis se existirem
-        if (
-          planData.customizableItems &&
-          planData.customizableItems.length > 0
-        ) {
-          setCustomizableItems(planData.customizableItems);
+        // Check if fixedItems exists and has data
+        if (planData.fixedItems) {
+          console.log("Fixed items:", planData.fixedItems);
+        } else {
+          console.log("No fixed items found in plan data");
         }
+
+        setSelectedPlan(planData);
       } catch (error) {
         console.error("Erro ao buscar plano:", error);
         setError("Erro ao carregar o plano selecionado");
@@ -155,17 +150,16 @@ export default function SubscriptionCheckoutPage() {
     fetchSelectedPlan();
   }, []);
 
-  // Verificar autenticação e carregar dados do usuário
+  // Check authentication and load user data
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        setAuthLoading(true);
-        // Verificar se é um cliente autenticado
+        // Check if user is authenticated
         const authResponse = await fetch("/api/customer/check-auth");
         const authData = await authResponse.json();
 
         if (authData.authenticated) {
-          // Buscar dados do cliente
+          // Fetch user data
           const userResponse = await fetch("/api/customer/user");
           const userData = await userResponse.json();
 
@@ -173,7 +167,7 @@ export default function SubscriptionCheckoutPage() {
             setIsAuthenticated(true);
             setUserData(userData);
 
-            // Preencher o formulário com os dados do usuário
+            // Fill form with user data
             form.setValue("name", userData.name || "");
             form.setValue("email", userData.email || "");
             form.setValue("phone", userData.phone || "");
@@ -187,56 +181,41 @@ export default function SubscriptionCheckoutPage() {
         console.error("Erro ao verificar autenticação:", error);
         setIsAuthenticated(false);
         setUserData(null);
-      } finally {
-        setAuthLoading(false);
       }
     };
 
-    // Verificar se há um plano selecionado
-    if (!selectedPlan) {
-      setValidationError(
-        "Selecione um plano antes de prosseguir com o checkout"
-      );
-      return;
+    if (selectedPlan) {
+      checkAuth();
     }
+  }, [selectedPlan, form]);
 
-    checkAuth();
-    setIsLoading(false);
-  }, [router, selectedPlan, form]);
+  // Calculate total price (plan price + customizable items)
+  const calculateTotal = () => {
+    if (!selectedPlan) return 0;
 
-  // Verificar se há um plano selecionado
-  useEffect(() => {
-    setIsLoading(authLoading);
+    const planPrice = parseFloat(selectedPlan.price);
+    const customizationTotal = getCustomizationTotal();
 
-    if (!authLoading) {
-      if (!selectedPlan) {
-        setValidationError("Nenhum plano selecionado");
-        return;
-      }
+    console.log("Calculating total:", {
+      planPrice,
+      customizationTotal,
+      total: planPrice + customizationTotal,
+    });
 
-      if (!isCustomizationValid()) {
-        setValidationError("Sua personalização não está completa");
-        return;
-      }
-    }
-  }, [authLoading, selectedPlan, isCustomizationValid]);
+    return planPrice + customizationTotal;
+  };
 
-  // Função para processar o checkout
+  // Handle form submission
   const onSubmit = async (data: CheckoutFormValues) => {
     if (!selectedPlan) {
-      setValidationError("Nenhum plano selecionado");
-      return;
-    }
-
-    if (!isCustomizationValid()) {
-      setValidationError("Por favor, complete a personalização do seu plano");
+      setError("Nenhum plano selecionado");
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      // Preparar os dados para o checkout
+      // Prepare checkout data
       const checkoutData = {
         planId: selectedPlan.id,
         customizableItems,
@@ -248,11 +227,10 @@ export default function SubscriptionCheckoutPage() {
           password: data.password,
           deliveryInstructions: data.deliveryInstructions,
         },
-        // Adicionar flag para criar conta apenas se o usuário não estiver autenticado
         createAccount: !isAuthenticated,
       };
 
-      // Enviar para a API
+      // Send checkout request
       const response = await fetch("/api/checkout/subscription", {
         method: "POST",
         headers: {
@@ -261,101 +239,88 @@ export default function SubscriptionCheckoutPage() {
         body: JSON.stringify(checkoutData),
       });
 
-      const result = await response.json();
+      const responseData = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Erro ao processar o checkout");
+        throw new Error(responseData.error || "Erro ao processar o checkout");
       }
 
-      // Limpar o estado de customização
-      clearCustomization();
+      // Handle successful checkout
+      if (responseData.success) {
+        // Clear customization
+        useSubscriptionStore.getState().clearCustomization();
 
-      // Mostrar um alerta de sucesso com botões para navegação
-      setSuccessMessage({
-        title: "Assinatura criada com sucesso!",
-        message: isAuthenticated
-          ? "Sua assinatura foi criada e já está disponível no seu painel."
-          : "Sua conta foi criada. Faça login para acessar sua assinatura.",
-        primaryAction: {
-          label: isAuthenticated ? "Ver minhas assinaturas" : "Fazer login",
-          href: isAuthenticated
-            ? "/customer/dashboard/subscription"
-            : "/customer/login",
-        },
-        secondaryAction: {
-          label: "Voltar para os planos",
-          href: "/plans",
-        },
-      });
-    } catch (error: any) {
+        // Show success message
+        setSuccessMessage({
+          title: "Assinatura realizada com sucesso!",
+          message:
+            "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
+          primaryAction: {
+            label: "Ver minhas assinaturas",
+            href: "/customer/subscriptions",
+          },
+          secondaryAction: {
+            label: "Voltar para a página inicial",
+            href: "/",
+          },
+        });
+      } else if (responseData.redirectUrl) {
+        // Redirect to payment page if needed
+        window.location.href = responseData.redirectUrl;
+      }
+    } catch (error) {
       console.error("Erro no checkout:", error);
-      setError(error.message || "Erro ao processar assinatura");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Ocorreu um erro ao processar sua assinatura"
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Show loading state
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container max-w-5xl py-8">
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Erro</AlertTitle>
-          <AlertDescription className="flex flex-col gap-4">
-            <p>{error}</p>
-            <div className="flex gap-4 mt-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setError(null)}
-              >
-                Fechar
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-        <Button onClick={() => router.push("/plans")}>
-          Voltar para os planos
-        </Button>
-      </div>
-    );
-  }
-
-  // Mostrar mensagem de sucesso com botões de navegação
-  if (successMessage) {
-    return (
-      <div className="container max-w-5xl py-8">
-        <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
-          <CheckCircle className="h-4 w-4 text-green-500" />
-          <AlertTitle>{successMessage.title}</AlertTitle>
-          <AlertDescription>{successMessage.message}</AlertDescription>
-        </Alert>
-        <div className="flex gap-4 mt-6">
-          <Button
-            onClick={() => router.push(successMessage.primaryAction.href)}
-          >
-            {successMessage.primaryAction.label}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push(successMessage.secondaryAction.href)}
-          >
-            {successMessage.secondaryAction.label}
-          </Button>
+      <div className="container max-w-5xl py-8 flex justify-center items-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Carregando informações do plano...</p>
         </div>
       </div>
     );
   }
 
-  // Garantir que temos acesso às propriedades necessárias do plano
+  // Show success message
+  if (successMessage) {
+    return (
+      <div className="container max-w-5xl py-8">
+        <Card className="p-8 text-center">
+          <Check className="h-16 w-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-2">{successMessage.title}</h2>
+          <p className="mb-6 text-muted-foreground">{successMessage.message}</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button
+              size="lg"
+              onClick={() => router.push(successMessage.primaryAction.href)}
+            >
+              {successMessage.primaryAction.label}
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => router.push(successMessage.secondaryAction.href)}
+            >
+              {successMessage.secondaryAction.label}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if no plan selected
   if (!selectedPlan) {
     return (
       <div className="container max-w-5xl py-8">
@@ -373,30 +338,11 @@ export default function SubscriptionCheckoutPage() {
     <div className="container max-w-5xl py-8">
       <h1 className="text-3xl font-bold mb-6">Finalizar Assinatura</h1>
 
-      {validationError && (
+      {error && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Erro de validação</AlertTitle>
-          <AlertDescription className="flex flex-col gap-4">
-            <p>{validationError}</p>
-            <div className="flex gap-4 mt-2">
-              {selectedPlan && (
-                <Button
-                  size="sm"
-                  onClick={() => router.push(`/plans/${selectedPlan.slug}`)}
-                >
-                  Voltar para personalização
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => router.push("/plans")}
-              >
-                Ver todos os planos
-              </Button>
-            </div>
-          </AlertDescription>
+          <AlertTitle>Erro</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
@@ -494,7 +440,7 @@ export default function SubscriptionCheckoutPage() {
                     )}
                   />
 
-                  {/* Campo de senha apenas para usuários não autenticados */}
+                  {/* Password field only for non-authenticated users */}
                   {!isAuthenticated && (
                     <FormField
                       control={form.control}
@@ -564,58 +510,85 @@ export default function SubscriptionCheckoutPage() {
               <CardTitle>Resumo do Pedido</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {selectedPlan && (
+              <div className="flex justify-between">
+                <span className="font-medium">Plano:</span>
+                <span>{selectedPlan.name}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="font-medium">Preço base:</span>
+                <span>
+                  R${" "}
+                  {parseFloat(selectedPlan.price).toFixed(2).replace(".", ",")}
+                </span>
+              </div>
+
+              <Separator />
+
+              {selectedPlan.fixedItems && selectedPlan.fixedItems.length > 0 ? (
+                <div className="space-y-2">
+                  <span className="font-medium">Itens inclusos no plano:</span>
+                  <ul className="text-sm space-y-1">
+                    {selectedPlan.fixedItems.map((item) => (
+                      <li key={item.id} className="flex justify-between">
+                        <span>
+                          {item.product.name} x {item.quantity}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Separator />
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground py-2">
+                  <p>Este plano não inclui itens fixos.</p>
+                  <Separator className="my-2" />
+                </div>
+              )}
+
+              {customizableItems.length > 0 ? (
                 <>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Plano:</span>
-                    <span>{selectedPlan.name}</span>
-                  </div>
-
-                  <Separator />
-
-                  {selectedPlan.fixedItems &&
-                    selectedPlan.fixedItems.length > 0 && (
-                      <div className="space-y-2">
-                        <span className="font-medium">Itens inclusos:</span>
-                        <ul className="text-sm space-y-1">
-                          {selectedPlan.fixedItems.map((item: FixedItem) => (
-                            <li key={item.id} className="flex justify-between">
-                              <span>
-                                {item.product.name} x {item.quantity}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                  <Separator />
-
                   <div>
                     <h3 className="font-medium mb-2">Itens personalizados:</h3>
                     <ul className="space-y-1 text-sm">
-                      {customizableItems.map((item: CustomizableItem) => (
+                      {customizableItems.map((item) => (
                         <li
                           key={item.product.id}
                           className="flex justify-between"
                         >
                           <span>{item.product.name}</span>
-                          <span>x{item.quantity}</span>
+                          <span>
+                            {item.quantity} x R${" "}
+                            {parseFloat(item.product.price)
+                              .toFixed(2)
+                              .replace(".", ",")}
+                          </span>
                         </li>
                       ))}
                     </ul>
                   </div>
 
-                  <Separator />
-
-                  <div className="flex justify-between font-bold">
-                    <span>Total:</span>
+                  <div className="flex justify-between">
+                    <span className="font-medium">
+                      Subtotal personalização:
+                    </span>
                     <span>
                       R$ {getCustomizationTotal().toFixed(2).replace(".", ",")}
                     </span>
                   </div>
+
+                  <Separator />
                 </>
+              ) : (
+                <div className="text-sm text-muted-foreground py-2">
+                  <p>Nenhum item personalizado selecionado.</p>
+                </div>
               )}
+
+              <div className="flex justify-between font-bold">
+                <span>Total:</span>
+                <span>R$ {calculateTotal().toFixed(2).replace(".", ",")}</span>
+              </div>
             </CardContent>
           </Card>
         </div>

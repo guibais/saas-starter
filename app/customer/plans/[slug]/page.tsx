@@ -90,12 +90,11 @@ export default function PlanDetailPage({
     getValidationErrors,
     setSelectedPlan,
     setCustomizationRules,
-    clearCustomization,
   } = useSubscriptionStore();
 
   // Verificar se o usuário adicionou pelo menos um item à cesta
   const hasCustomizedBasket = () => {
-    return customizableItems.length > 0;
+    return isCustomizationValid();
   };
 
   // Buscar detalhes do plano
@@ -143,12 +142,7 @@ export default function PlanDetailPage({
     };
 
     fetchPlanDetails();
-
-    // Limpar customização ao sair da página
-    return () => {
-      clearCustomization();
-    };
-  }, [slug, setSelectedPlan, setCustomizationRules, clearCustomization]);
+  }, [slug, setSelectedPlan, setCustomizationRules]);
 
   const handleAddToCustomization = (product: Product) => {
     addCustomizationItem(product as any, 1);
