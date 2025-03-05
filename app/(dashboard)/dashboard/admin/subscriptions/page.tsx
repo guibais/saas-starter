@@ -188,12 +188,12 @@ export default function SubscriptionsPage() {
   const updateSubscriptionStatus = async (id: number, status: string) => {
     try {
       setIsSubmitting(true);
-      const response = await fetch("/api/subscriptions", {
+      const response = await fetch(`/api/subscriptions/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ status }),
       });
 
       if (!response.ok) {

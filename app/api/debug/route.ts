@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getSession } from "@/lib/auth/session";
+import { getSession, getCustomerSession } from "@/lib/auth/session";
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,21 +8,31 @@ export async function GET(request: NextRequest) {
     const cookieStore = await cookies();
     const allCookies = cookieStore.getAll();
 
-    // Tentar obter a sessão
-    const session = await getSession();
+    // Tentar obter a sessão de admin e cliente
+    const adminSession = await getSession();
+    const customerSession = await getCustomerSession();
 
     return NextResponse.json({
       cookies: allCookies.map((cookie) => ({
         name: cookie.name,
-        value: cookie.name === "session" ? "***" : "***", // Ocultar valores por segurança
+        value: "***", // Ocultar valores por segurança
       })),
       hasSessionCookie: cookieStore.has("session"),
-      sessionValid: session !== null,
-      session: session
+      hasCustomerSessionCookie: cookieStore.has("customer_session"),
+      adminSessionValid: adminSession !== null,
+      customerSessionValid: customerSession !== null,
+      adminSession: adminSession
         ? {
-            userRole: session.user.role,
-            userId: session.user.id,
-            expires: session.expires,
+            userRole: adminSession.user.role,
+            userId: adminSession.user.id,
+            expires: adminSession.expires,
+          }
+        : null,
+      customerSession: customerSession
+        ? {
+            userId: customerSession.user.id,
+            expires: customerSession.expires,
+            isCustomer: customerSession.isCustomer,
           }
         : null,
     });

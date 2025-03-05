@@ -8,6 +8,7 @@ import {
   products,
   paymentMethods,
   payments,
+  planFixedItems,
 } from "@/lib/db/schema";
 import { getSession, verifyToken, hashPassword } from "@/lib/auth/session";
 import { eq, sql } from "drizzle-orm";
@@ -219,9 +220,9 @@ export async function POST(request: NextRequest) {
     // Inserir na tabela de assinaturas usando SQL raw
     const insertResult = await db.execute(
       sql`INSERT INTO user_subscriptions 
-          (customer_id, plan_id, status, start_date, next_delivery_date, created_at, updated_at) 
+          (customer_id, plan_id, status, start_date, next_delivery_date, plan_name, created_at, updated_at) 
           VALUES 
-          (${customerId}, ${body.planId}, 'active', ${formattedStartDate}::date, ${formattedNextDeliveryDate}::date, NOW(), NOW()) 
+          (${customerId}, ${body.planId}, 'active', ${formattedStartDate}::date, ${formattedNextDeliveryDate}::date, ${plan.name}, NOW(), NOW()) 
           RETURNING id, status, start_date as "startDate", next_delivery_date as "nextDeliveryDate"`
     );
 
@@ -233,6 +234,33 @@ export async function POST(request: NextRequest) {
       subscriptionId,
       status: subscription.status,
     });
+
+    // Buscar itens fixos do plano
+    const fixedPlanItems = await db
+      .select()
+      .from(planFixedItems)
+      .where(eq(planFixedItems.planId, body.planId));
+
+    console.log(`Processando ${fixedPlanItems.length} itens fixos do plano`);
+
+    // Adicionar itens fixos do plano à assinatura
+    if (fixedPlanItems.length > 0) {
+      for (const item of fixedPlanItems) {
+        console.log("Inserindo item fixo:", {
+          subscriptionId,
+          productId: item.productId,
+          quantity: item.quantity,
+        });
+
+        // Inserir item fixo da assinatura usando SQL raw
+        await db.execute(
+          sql`INSERT INTO subscription_items 
+              (subscription_id, product_id, quantity, created_at, updated_at) 
+              VALUES 
+              (${subscriptionId}, ${item.productId}, ${item.quantity}, NOW(), NOW())`
+        );
+      }
+    }
 
     // Inserir itens personalizáveis
     if (body.customizableItems.length > 0) {

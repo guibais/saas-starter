@@ -17,6 +17,7 @@ import {
   PauseCircle,
   Clock,
   AlertCircle,
+  X,
 } from "lucide-react";
 import { cookies } from "next/headers";
 import { format } from "date-fns";
@@ -238,29 +239,43 @@ export default async function SubscriptionPage({
                   Alterar Plano
                 </Link>
               </Button>
-              {subscription.status === "active" ? (
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  asChild
-                >
-                  <Link href={`/api/subscriptions/${subscription.id}/pause`}>
-                    <PauseCircle className="h-4 w-4" />
-                    Pausar Assinatura
-                  </Link>
-                </Button>
-              ) : subscription.status === "paused" ? (
-                <Button
-                  variant="outline"
-                  className="flex items-center gap-2"
-                  asChild
-                >
-                  <Link href={`/api/subscriptions/${subscription.id}/resume`}>
-                    <RefreshCcw className="h-4 w-4" />
-                    Retomar Assinatura
-                  </Link>
-                </Button>
-              ) : null}
+              <div className="flex gap-2">
+                {subscription.status === "active" ? (
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    asChild
+                  >
+                    <Link href={`/api/subscriptions/${subscription.id}/pause`}>
+                      <PauseCircle className="h-4 w-4" />
+                      Pausar Assinatura
+                    </Link>
+                  </Button>
+                ) : subscription.status === "paused" ? (
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    asChild
+                  >
+                    <Link href={`/api/subscriptions/${subscription.id}/resume`}>
+                      <RefreshCcw className="h-4 w-4" />
+                      Retomar Assinatura
+                    </Link>
+                  </Button>
+                ) : null}
+                {subscription.status !== "cancelled" && (
+                  <Button
+                    variant="destructive"
+                    className="flex items-center gap-2"
+                    asChild
+                  >
+                    <Link href={`/customer/dashboard/subscription/cancel`}>
+                      <X className="h-4 w-4" />
+                      Cancelar Assinatura
+                    </Link>
+                  </Button>
+                )}
+              </div>
             </CardFooter>
           </Card>
 

@@ -98,12 +98,6 @@ export function CustomerHeader({ user }: { user: any }) {
         </div>
         <div className="flex items-center space-x-4">
           <Link
-            href="/products"
-            className="hidden md:inline-block text-sm font-medium text-gray-700 hover:text-gray-900"
-          >
-            Loja
-          </Link>
-          <Link
             href="/plans"
             className="hidden md:inline-block text-sm font-medium text-gray-700 hover:text-gray-900"
           >
@@ -161,12 +155,6 @@ export function CustomerHeader({ user }: { user: any }) {
                   Minha Conta
                 </Link>
                 <div className="border-t border-gray-200 my-2 pt-2"></div>
-                <Link
-                  href="/products"
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900"
-                >
-                  Loja
-                </Link>
                 <Link
                   href="/plans"
                   className="text-sm font-medium text-gray-700 hover:text-gray-900"

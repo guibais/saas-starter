@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,7 @@ interface Plan {
 
 interface SubscriptionDetails {
   subscription: Subscription;
-  user: User;
+  customer: User;
   plan: Plan;
   items: SubscriptionItem[];
 }
@@ -103,6 +103,8 @@ export default function SubscriptionDetailsPage({
   params: { id: string };
 }) {
   const router = useRouter();
+  const unwrappedParams = use(params as any) as { id: string };
+  const id = unwrappedParams.id;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subscriptionDetails, setSubscriptionDetails] =
@@ -124,7 +126,7 @@ export default function SubscriptionDetailsPage({
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/subscriptions/${params.id}`);
+        const response = await fetch(`/api/subscriptions/${id}`);
         if (!response.ok) {
           throw new Error("Falha ao carregar detalhes da assinatura");
         }
@@ -139,7 +141,7 @@ export default function SubscriptionDetailsPage({
     };
 
     fetchSubscriptionDetails();
-  }, [params.id]);
+  }, [id]);
 
   // Formatar data
   const formatDate = (dateString: string | null) => {
@@ -192,7 +194,7 @@ export default function SubscriptionDetailsPage({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/subscriptions/${params.id}`, {
+      const response = await fetch(`/api/subscriptions/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -237,7 +239,7 @@ export default function SubscriptionDetailsPage({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/subscriptions/${params.id}`, {
+      const response = await fetch(`/api/subscriptions/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -329,7 +331,7 @@ export default function SubscriptionDetailsPage({
     );
   }
 
-  const { subscription, user, plan, items } = subscriptionDetails;
+  const { subscription, customer, plan, items } = subscriptionDetails;
 
   return (
     <div className="flex flex-col gap-6">
@@ -464,15 +466,17 @@ export default function SubscriptionDetailsPage({
             <div className="space-y-2">
               <div className="flex items-center">
                 <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                <span className="font-medium">{user.name || "Sem nome"}</span>
+                <span className="font-medium">
+                  {customer?.name || "Sem nome"}
+                </span>
               </div>
               <div className="flex items-center">
                 <Mail className="h-4 w-4 mr-2 text-muted-foreground" />
-                <span>{user.email || "Sem e-mail"}</span>
+                <span>{customer?.email || "Sem e-mail"}</span>
               </div>
               <div className="flex items-center">
                 <Phone className="h-4 w-4 mr-2 text-muted-foreground" />
-                <span>{user.phone || "Sem telefone"}</span>
+                <span>{customer?.phone || "Sem telefone"}</span>
               </div>
             </div>
 
@@ -482,7 +486,7 @@ export default function SubscriptionDetailsPage({
               <h4 className="text-sm font-medium mb-2">Endereço de Entrega</h4>
               <div className="flex items-start">
                 <MapPin className="h-4 w-4 mr-2 mt-1 text-muted-foreground" />
-                <span>{user.address || "Sem endereço cadastrado"}</span>
+                <span>{customer?.address || "Sem endereço cadastrado"}</span>
               </div>
             </div>
 
@@ -491,13 +495,13 @@ export default function SubscriptionDetailsPage({
                 Instruções de Entrega
               </h4>
               <p className="text-sm text-muted-foreground">
-                {user.deliveryInstructions || "Sem instruções específicas"}
+                {customer?.deliveryInstructions || "Sem instruções específicas"}
               </p>
             </div>
           </CardContent>
           <CardFooter>
             <Button variant="outline" className="w-full" asChild>
-              <Link href={`/dashboard/admin/users/${user.id}`}>
+              <Link href={`/dashboard/admin/users/${customer?.id}`}>
                 Ver Perfil Completo
               </Link>
             </Button>

@@ -6,8 +6,9 @@ import {
   subscriptionPlans,
   subscriptionItems,
   products,
+  customers,
 } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth/session";
+import { getSession, getCustomerSession } from "@/lib/auth/session";
 import { eq } from "drizzle-orm";
 
 // GET /api/subscriptions/[id] - Obter detalhes de uma assinatura específica
@@ -28,7 +29,7 @@ export async function GET(
     const subscription = await db
       .select({
         id: userSubscriptions.id,
-        userId: userSubscriptions.userId,
+        customerId: userSubscriptions.customerId,
         planId: userSubscriptions.planId,
         status: userSubscriptions.status,
         startDate: userSubscriptions.startDate,
@@ -46,18 +47,17 @@ export async function GET(
       );
     }
 
-    // Buscar informações do usuário
-    const user = await db
+    // Buscar informações do cliente
+    const customer = await db
       .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        phone: users.phone,
-        address: users.address,
-        deliveryInstructions: users.deliveryInstructions,
+        id: customers.id,
+        name: customers.name,
+        email: customers.email,
+        phone: customers.phone,
+        address: customers.address,
       })
-      .from(users)
-      .where(eq(users.id, subscription[0].userId))
+      .from(customers)
+      .where(eq(customers.id, subscription[0].customerId))
       .limit(1);
 
     // Buscar informações do plano
@@ -84,7 +84,7 @@ export async function GET(
 
     return NextResponse.json({
       subscription: subscription[0],
-      user: user[0] || null,
+      customer: customer[0] || null,
       plan: plan[0] || null,
       items: subscriptionItemsWithProducts,
     });
@@ -92,6 +92,103 @@ export async function GET(
     console.error("Erro ao buscar detalhes da assinatura:", error);
     return NextResponse.json(
       { error: "Erro ao buscar detalhes da assinatura" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/subscriptions/[id] - Atualizar uma assinatura específica
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Verificar autenticação (admin ou cliente dono da assinatura)
+    const adminSession = await getSession();
+    const customerSession = await getCustomerSession();
+
+    if (!adminSession && !customerSession) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const subscriptionId = parseInt(params.id);
+    if (isNaN(subscriptionId)) {
+      return NextResponse.json(
+        { error: "ID de assinatura inválido" },
+        { status: 400 }
+      );
+    }
+
+    // Buscar a assinatura
+    const subscription = await db.query.userSubscriptions.findFirst({
+      where: eq(userSubscriptions.id, subscriptionId),
+    });
+
+    if (!subscription) {
+      return NextResponse.json(
+        { error: "Assinatura não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    // Verificar permissões
+    const isAdmin = adminSession && adminSession.user.role === "admin";
+    const isOwner =
+      customerSession && customerSession.user.id === subscription.customerId;
+
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    }
+
+    // Obter dados do corpo da requisição
+    const body = await request.json();
+    const { status, statusReason, nextDeliveryDate } = body;
+
+    // Validar os dados
+    if (!status) {
+      return NextResponse.json(
+        { error: "Status é obrigatório" },
+        { status: 400 }
+      );
+    }
+
+    // Verificar se o status é válido
+    const validStatuses = ["active", "paused", "cancelled"];
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+    }
+
+    // Preparar dados para atualização
+    const updateData: any = {
+      status,
+      updatedAt: new Date(),
+    };
+
+    // Se fornecido, atualizar a razão do status
+    if (statusReason !== undefined) {
+      updateData.statusReason = statusReason;
+    }
+
+    // Se fornecido, atualizar a próxima data de entrega
+    if (nextDeliveryDate) {
+      updateData.nextDeliveryDate = new Date(nextDeliveryDate);
+    }
+
+    // Atualizar a assinatura
+    const updated = await db
+      .update(userSubscriptions)
+      .set(updateData)
+      .where(eq(userSubscriptions.id, subscriptionId))
+      .returning();
+
+    return NextResponse.json({
+      message: "Assinatura atualizada com sucesso",
+      subscription: updated[0],
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar assinatura:", error);
+    return NextResponse.json(
+      { error: "Erro ao atualizar assinatura" },
       { status: 500 }
     );
   }

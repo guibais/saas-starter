@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, User, Menu, LogOut } from "lucide-react";
+import { User, Menu, LogOut } from "lucide-react";
 import { getUser } from "@/lib/db/queries";
 import {
   Sheet,
@@ -10,8 +10,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { CartButton } from "@/components/cart/cart-button";
-import { CartSheet } from "@/components/cart/cart-sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,12 +40,6 @@ export async function SiteHeader() {
           </Link>
           <nav className="hidden md:flex gap-6">
             <Link
-              href="/products"
-              className="text-sm font-medium text-gray-600 hover:text-green-800"
-            >
-              Frutas
-            </Link>
-            <Link
               href="/plans"
               className="text-sm font-medium text-gray-600 hover:text-green-800"
             >
@@ -68,7 +60,6 @@ export async function SiteHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <CartButton />
           {user || isCustomer ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -153,12 +144,6 @@ export async function SiteHeader() {
               </SheetHeader>
               <nav className="flex flex-col gap-4 mt-8">
                 <Link
-                  href="/products"
-                  className="text-sm font-medium text-gray-600 hover:text-green-800"
-                >
-                  Frutas
-                </Link>
-                <Link
                   href="/plans"
                   className="text-sm font-medium text-gray-600 hover:text-green-800"
                 >
@@ -205,7 +190,6 @@ export async function SiteHeader() {
           </Sheet>
         </div>
       </div>
-      <CartSheet />
     </header>
   );
 }
