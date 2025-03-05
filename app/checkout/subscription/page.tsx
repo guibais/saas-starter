@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import Cookies from "js-cookie";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -212,6 +211,16 @@ export default function SubscriptionCheckoutPage() {
     mode: "onChange", // Validar ao alterar os campos
   });
 
+  // Verificar autenticação separadamente
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  // Atualizar o resolver quando o status de autenticação mudar
+  useEffect(() => {
+    form.clearErrors("password");
+  }, [isAuthenticated, form]);
+
   // Fetch selected plan based on query parameter
   useEffect(() => {
     const fetchSelectedPlan = async () => {
@@ -255,8 +264,9 @@ export default function SubscriptionCheckoutPage() {
         setSelectedPlan(data);
         console.log("Plano selecionado carregado:", data);
 
-        // Verificar autenticação
-        await checkAuth();
+        // Verificar autenticação primeiro, antes de definir isLoading como false
+        const isAuth = await checkAuth();
+        console.log("Status de autenticação verificado:", isAuth);
 
         setIsLoading(false);
       } catch (error) {
@@ -281,6 +291,8 @@ export default function SubscriptionCheckoutPage() {
         const userDetails = data.user;
         setIsAuthenticated(true);
         setUserData(userDetails);
+
+        console.log("Usuário autenticado, dados:", userDetails);
 
         // Fill form with user data
         form.setValue("name", userDetails.name || "");
@@ -467,7 +479,7 @@ export default function SubscriptionCheckoutPage() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="container max-w-5xl py-12 flex justify-center items-center min-h-[60vh]">
+      <div className="container max-w-5xl py-12 px-6 flex justify-center items-center min-h-[60vh]">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-green-600" />
           <p className="text-gray-600">Preparando seu checkout...</p>
@@ -479,7 +491,7 @@ export default function SubscriptionCheckoutPage() {
   // Show success message
   if (successMessage) {
     return (
-      <div className="container max-w-5xl py-12">
+      <div className="container max-w-5xl py-12 px-6">
         <Card className="p-8 text-center border-green-200 shadow-md">
           <Check className="h-16 w-16 text-green-500 mx-auto mb-6" />
           <h2 className="text-2xl font-bold mb-3 text-green-800">
@@ -511,7 +523,7 @@ export default function SubscriptionCheckoutPage() {
   // Show error if no plan selected
   if (!selectedPlan) {
     return (
-      <div className="container max-w-5xl py-12">
+      <div className="container max-w-5xl py-12 px-6">
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Erro</AlertTitle>
@@ -523,7 +535,7 @@ export default function SubscriptionCheckoutPage() {
   }
 
   return (
-    <div className="container max-w-6xl py-12">
+    <div className="container max-w-6xl py-12 px-6">
       <h1 className="text-3xl font-bold mb-2 text-green-800">
         Finalizar Assinatura
       </h1>
