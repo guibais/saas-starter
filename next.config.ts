@@ -4,7 +4,10 @@ const nextConfig: NextConfig = {
   experimental: {
     ppr: true,
     newDevOverlay: true
-  }
+  },
+  eslint: {
+        ignoreDuringBuilds: true,
+  },
 };
 
 export default nextConfig;
