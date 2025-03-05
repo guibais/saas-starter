@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import Cookies from "js-cookie";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -290,6 +291,17 @@ export default function SubscriptionCheckoutPage() {
           "deliveryInstructions",
           userDetails.deliveryInstructions || ""
         );
+
+        // Foco no primeiro campo que precisa ser preenchido ou no campo de instruções de entrega
+        setTimeout(() => {
+          if (!userDetails.address) {
+            document.getElementById("address")?.focus();
+          } else if (!userDetails.phone) {
+            document.getElementById("phone")?.focus();
+          } else {
+            document.getElementById("deliveryInstructions")?.focus();
+          }
+        }, 500);
       } else {
         setIsAuthenticated(false);
         setUserData(null);
@@ -367,17 +379,18 @@ export default function SubscriptionCheckoutPage() {
         createAccount: !isAuthenticated,
       };
 
-      // Send checkout request
+      // Log para depuração, removendo dados sensíveis
       console.log("Enviando dados para checkout:", {
         planId: checkoutData.planId,
         customizableItems: checkoutData.customizableItems,
         createAccount: checkoutData.createAccount,
-        hasPaymentDetails: !!checkoutData.paymentDetails,
+        isAuthenticated,
         userDetails: {
-          ...checkoutData.userDetails,
+          name: checkoutData.userDetails.name,
+          email: checkoutData.userDetails.email,
           hasPassword: !!checkoutData.userDetails.password,
         },
-        isAuthenticated,
+        hasPaymentInfo: true,
       });
 
       try {
@@ -518,6 +531,22 @@ export default function SubscriptionCheckoutPage() {
         Complete o checkout para iniciar sua assinatura de frutas frescas
       </p>
 
+      {isAuthenticated && (
+        <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-8 flex items-center">
+          <Check className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
+          <div>
+            <p className="text-green-800 font-medium">
+              Você está logado como {userData?.name || userData?.email}
+            </p>
+            <p className="text-sm text-green-700">
+              Seus dados pessoais foram preenchidos automaticamente. Você só
+              precisa confirmar ou atualizar as informações e adicionar os dados
+              de pagamento.
+            </p>
+          </div>
+        </div>
+      )}
+
       {error && (
         <Alert variant="destructive" className="mb-8">
           <AlertCircle className="h-4 w-4" />
@@ -537,7 +566,8 @@ export default function SubscriptionCheckoutPage() {
                   </CardTitle>
                   {isAuthenticated && (
                     <p className="text-sm text-muted-foreground mt-1">
-                      Suas informações foram preenchidas automaticamente.
+                      Suas informações foram preenchidas automaticamente. Você
+                      pode editar se necessário.
                     </p>
                   )}
                 </CardHeader>
@@ -549,12 +579,7 @@ export default function SubscriptionCheckoutPage() {
                       <FormItem>
                         <FormLabel>Nome Completo</FormLabel>
                         <FormControl>
-                          <Input
-                            placeholder="Seu nome completo"
-                            {...field}
-                            disabled={isAuthenticated}
-                            className={isAuthenticated ? "bg-gray-50" : ""}
-                          />
+                          <Input placeholder="Seu nome completo" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -590,10 +615,9 @@ export default function SubscriptionCheckoutPage() {
                           <FormLabel>Telefone</FormLabel>
                           <FormControl>
                             <Input
+                              id="phone"
                               placeholder="(00) 00000-0000"
                               {...field}
-                              disabled={isAuthenticated}
-                              className={isAuthenticated ? "bg-gray-50" : ""}
                             />
                           </FormControl>
                           <FormMessage />
@@ -610,10 +634,9 @@ export default function SubscriptionCheckoutPage() {
                         <FormLabel>Endereço Completo</FormLabel>
                         <FormControl>
                           <Textarea
+                            id="address"
                             placeholder="Rua, número, bairro, cidade, estado, CEP"
                             {...field}
-                            disabled={isAuthenticated}
-                            className={isAuthenticated ? "bg-gray-50" : ""}
                           />
                         </FormControl>
                         <FormMessage />
@@ -631,6 +654,7 @@ export default function SubscriptionCheckoutPage() {
                           <FormLabel>Senha</FormLabel>
                           <FormControl>
                             <Input
+                              id="password"
                               type="password"
                               placeholder="Crie uma senha para sua conta"
                               {...field}
@@ -654,6 +678,7 @@ export default function SubscriptionCheckoutPage() {
                         <FormLabel>Instruções de Entrega (opcional)</FormLabel>
                         <FormControl>
                           <Textarea
+                            id="deliveryInstructions"
                             placeholder="Instruções adicionais para entrega (portaria, pontos de referência, etc)"
                             {...field}
                             className="min-h-[80px]"
