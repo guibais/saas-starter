@@ -266,18 +266,12 @@ export default function PlanDetailPage({
   // Modificar o botão de checkout para verificar se a cesta foi personalizada
   const handleProceedToCheckout = () => {
     if (!hasCustomizedBasket()) {
-      toast.error("Você precisa personalizar sua cesta antes de prosseguir");
-      setActiveTab("customize");
+      toast.error("Por favor, complete a personalização da sua cesta");
       return;
     }
 
-    if (!isCustomizationValid()) {
-      const errors = getValidationErrors();
-      toast.error(errors.join("\n"));
-      return;
-    }
-
-    router.push("/checkout/subscription");
+    // Redirecionar para o checkout com o slug do plano como parâmetro
+    router.push(`/checkout/subscription?plan=${slug}`);
   };
 
   const formatCurrency = (value: string | number) => {
