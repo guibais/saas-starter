@@ -46,8 +46,9 @@ export function CustomerHeader({ user }: { user: any }) {
       });
 
       if (response.ok) {
-        // Redirecionar para a página inicial após o logout bem-sucedido
-        router.push("/");
+        // Usar a URL base da variável de ambiente ou fallback para caminho relativo
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+        router.push(`${baseUrl}/`);
         router.refresh();
       } else {
         console.error("Falha ao fazer logout");

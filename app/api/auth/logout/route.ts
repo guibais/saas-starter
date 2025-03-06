@@ -25,8 +25,11 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Determinar a URL base para redirecionamento
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+
     // Criar resposta de redirecionamento para a página inicial
-    const response = NextResponse.redirect(new URL("/", request.url));
+    const response = NextResponse.redirect(`${baseUrl}/`);
 
     // Limpar cookie de sessão
     response.cookies.set({

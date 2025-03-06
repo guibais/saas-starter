@@ -127,7 +127,9 @@ export async function signOut() {
   const cookieStore = await cookies();
   cookieStore.delete("session");
 
-  redirect("/sign-in");
+  // Use a URL absoluta baseada na variável de ambiente ou fallback para caminho relativo
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  redirect(`${baseUrl}/sign-in`);
 }
 
 const updatePasswordSchema = z
