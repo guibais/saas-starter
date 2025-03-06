@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ADMIN_COOKIE_NAME } from "@/lib/auth/cookie-utils";
 
 export default function DebugPage() {
   const [debugInfo, setDebugInfo] = useState<any>(null);
@@ -74,7 +75,7 @@ export default function DebugPage() {
                       {debugInfo.cookies.map((cookie: any, index: number) => (
                         <li key={index}>
                           {cookie.name}{" "}
-                          {cookie.name === "admin_session" &&
+                          {cookie.name === ADMIN_COOKIE_NAME &&
                           debugInfo.hasSessionCookie
                             ? "(presente)"
                             : ""}

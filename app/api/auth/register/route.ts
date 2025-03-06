@@ -3,6 +3,10 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword, signToken } from "@/lib/auth/session";
+import {
+  ADMIN_COOKIE_NAME,
+  setSessionCookieInResponse,
+} from "@/lib/auth/cookie-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,14 +77,13 @@ export async function POST(request: NextRequest) {
       role: newUser.role,
     });
 
-    // Definir cookie de sessão na resposta
-    response.cookies.set({
-      name: "admin_session",
-      value: token,
-      httpOnly: true,
-      expires,
-      path: "/",
-    });
+    // Definir cookie de sessão na resposta usando a função utilitária
+    setSessionCookieInResponse(
+      response.cookies,
+      ADMIN_COOKIE_NAME,
+      token,
+      expires
+    );
 
     return response;
   } catch (error) {

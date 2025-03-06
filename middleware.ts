@@ -1,6 +1,11 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { signToken, verifyToken } from "@/lib/auth/session";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyToken, signToken } from "@/lib/auth/session";
+import {
+  ADMIN_COOKIE_NAME,
+  CUSTOMER_COOKIE_NAME,
+  setSessionCookieInResponse,
+  clearSessionCookieInResponse,
+} from "@/lib/auth/cookie-utils";
 
 const protectedRoutes = "/dashboard";
 const adminRoutes = "/dashboard/admin";
@@ -24,13 +29,14 @@ export async function middleware(request: NextRequest) {
   log(`[Middleware] Referer: ${referer || "Nenhum"}`);
 
   // Verificar os cookies corretos
-  const adminSessionCookie = request.cookies.get("admin_session");
-  const customerSessionCookie = request.cookies.get("customer_session");
+  const adminSessionCookie = request.cookies.get(ADMIN_COOKIE_NAME);
+  const customerSessionCookie = request.cookies.get(CUSTOMER_COOKIE_NAME);
 
-  log(`[Middleware] Cookies encontrados:`, {
-    admin_session: adminSessionCookie ? "presente" : "ausente",
-    customer_session: customerSessionCookie ? "presente" : "ausente",
-  });
+  log(
+    `[Middleware] Cookies encontrados: { admin_session: '${
+      adminSessionCookie ? "presente" : "ausente"
+    }', customer_session: '${customerSessionCookie ? "presente" : "ausente"}' }`
+  );
 
   const isProtectedRoute = pathname.startsWith(protectedRoutes);
   const isAdminRoute = pathname.startsWith(adminRoutes);
@@ -101,7 +107,7 @@ export async function middleware(request: NextRequest) {
         // Use as configurações corretas para remover o cookie
         const isProd = process.env.NODE_ENV === "production";
         const cookieOptions: any = {
-          name: "admin_session",
+          name: ADMIN_COOKIE_NAME,
           value: "",
           expires: new Date(0),
           path: "/",
@@ -112,6 +118,11 @@ export async function middleware(request: NextRequest) {
         // Em produção, adicionar domain se configurado
         if (isProd && process.env.COOKIE_DOMAIN) {
           cookieOptions.domain = process.env.COOKIE_DOMAIN;
+        }
+
+        // Em produção, adicionar priority se configurado
+        if (isProd && process.env.COOKIE_PRIORITY) {
+          cookieOptions.priority = process.env.COOKIE_PRIORITY;
         }
 
         res.cookies.set(cookieOptions);
@@ -157,25 +168,13 @@ export async function middleware(request: NextRequest) {
 
         const newToken = await signToken(updatedSession);
 
-        // Configurações para renovar o cookie
-        const isProd = process.env.NODE_ENV === "production";
-        const cookieOptions: any = {
-          name: "admin_session",
-          value: newToken,
-          httpOnly: true,
-          expires: expiresInOneDay,
-          path: "/",
-          sameSite: "strict",
-          secure: isProd,
-          priority: "high",
-        };
-
-        // Em produção, adicionar domain se configurado
-        if (isProd && process.env.COOKIE_DOMAIN) {
-          cookieOptions.domain = process.env.COOKIE_DOMAIN;
-        }
-
-        res.cookies.set(cookieOptions);
+        // Renovar o cookie usando a função utilitária
+        setSessionCookieInResponse(
+          res.cookies,
+          ADMIN_COOKIE_NAME,
+          newToken,
+          expiresInOneDay
+        );
 
         log(
           `[Middleware] Sessão renovada com sucesso. Nova expiração: ${expiresInOneDay.toISOString()}`
@@ -209,7 +208,7 @@ export async function middleware(request: NextRequest) {
         log(
           `[Middleware] Sessão de cliente inválida ou expirada. Removendo cookie e redirecionando.`
         );
-        res.cookies.delete("customer_session");
+        res.cookies.delete(CUSTOMER_COOKIE_NAME);
         if (isCustomerDashboardRoute) {
           return NextResponse.redirect(new URL("/customer/login", request.url));
         }
@@ -239,19 +238,13 @@ export async function middleware(request: NextRequest) {
 
         const newToken = await signToken(updatedSession);
 
-        // Configurações para o cookie de cliente
-        const cookieOptions: any = {
-          name: "customer_session",
-          value: newToken,
-          httpOnly: true,
-          expires: expiresInOneDay,
-          path: "/",
-          sameSite: "strict",
-          secure: process.env.NODE_ENV === "production",
-          priority: "high",
-        };
-
-        res.cookies.set(cookieOptions);
+        // Renovar o cookie usando a função utilitária
+        setSessionCookieInResponse(
+          res.cookies,
+          CUSTOMER_COOKIE_NAME,
+          newToken,
+          expiresInOneDay
+        );
 
         log(
           `[Middleware] Sessão de cliente renovada com sucesso. Nova expiração: ${expiresInOneDay.toISOString()}`

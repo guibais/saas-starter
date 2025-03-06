@@ -3,13 +3,17 @@ import { db } from "@/lib/db";
 import { users, customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyToken } from "@/lib/auth/session";
+import {
+  ADMIN_COOKIE_NAME,
+  CUSTOMER_COOKIE_NAME,
+} from "@/lib/auth/cookie-utils";
 
 export async function GET(request: NextRequest) {
   console.log("[API /auth/user] Recebendo solicitação");
 
   try {
     // Primeiro, tentar obter a sessão normal (admin/staff)
-    const sessionCookie = request.cookies.get("admin_session");
+    const sessionCookie = request.cookies.get(ADMIN_COOKIE_NAME);
 
     if (sessionCookie) {
       console.log(
@@ -60,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Se não tiver session válida ou não encontrou o usuário, tentar customer_session
-    const customerSessionCookie = request.cookies.get("customer_session");
+    const customerSessionCookie = request.cookies.get(CUSTOMER_COOKIE_NAME);
 
     if (customerSessionCookie) {
       console.log(

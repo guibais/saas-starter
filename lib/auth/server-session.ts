@@ -6,6 +6,11 @@ import { users, customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyToken, signToken } from "@/lib/auth/session";
 import type { User } from "@/lib/db/schema";
+import {
+  ADMIN_COOKIE_NAME,
+  CUSTOMER_COOKIE_NAME,
+  setSessionCookie,
+} from "./cookie-utils";
 
 // Função para obter a sessão do usuário
 export async function getSession() {
@@ -13,7 +18,7 @@ export async function getSession() {
     console.log("[getSession] Obtendo cookie de sessão");
     // Get the session cookie from request headers
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("admin_session");
+    const sessionCookie = cookieStore.get(ADMIN_COOKIE_NAME);
 
     if (!sessionCookie) {
       console.log("[getSession] Cookie de sessão não encontrado");
@@ -39,7 +44,6 @@ export async function getSession() {
         return null;
       }
 
-      console.log("[getSession] Sessão válida encontrada");
       return session;
     } catch (error) {
       console.error("[getSession] Erro ao verificar token:", error);
@@ -57,7 +61,7 @@ export async function getCustomerSession() {
     console.log("[getCustomerSession] Obtendo cookie de sessão do cliente");
     // Get the customer session cookie from request headers
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("customer_session");
+    const sessionCookie = cookieStore.get(CUSTOMER_COOKIE_NAME);
 
     if (!sessionCookie) {
       console.log("[Auth] Customer session cookie not found");
@@ -107,21 +111,11 @@ export async function setSession(user: User) {
   };
 
   const token = await signToken(session);
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day from now
 
-  // Set the session cookie
+  // Set the session cookie using the utility function
   const cookieStore = await cookies();
-  const isProd = process.env.NODE_ENV === "production";
-
-  cookieStore.set({
-    name: "admin_session",
-    value: token,
-    httpOnly: true,
-    path: "/",
-    secure: isProd,
-    maxAge: 60 * 60 * 24, // 1 day in seconds
-    sameSite: "strict",
-    priority: "high",
-  });
+  setSessionCookie(cookieStore, ADMIN_COOKIE_NAME, token, expires);
 
   console.log(`[setSession] Sessão criada com sucesso para usuário ${user.id}`);
   return session;

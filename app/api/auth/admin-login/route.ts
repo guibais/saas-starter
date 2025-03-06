@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { comparePasswords, signToken } from "@/lib/auth/session";
+import {
+  ADMIN_COOKIE_NAME,
+  CUSTOMER_COOKIE_NAME,
+  setSessionCookieInResponse,
+} from "@/lib/auth/cookie-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -87,48 +91,28 @@ export async function POST(request: NextRequest) {
     });
 
     // Garantir que quaisquer cookies antigos sejam removidos
-    response.cookies.delete("admin_session");
+    response.cookies.delete(ADMIN_COOKIE_NAME);
 
     // Verificar se já existia um cookie de cliente
-    const customerSessionCookie = request.cookies.get("customer_session");
+    const customerSessionCookie = request.cookies.get(CUSTOMER_COOKIE_NAME);
     if (customerSessionCookie) {
       console.log(
         "[AdminLogin] NOTA: Cookie de cliente já existe. Isso pode causar conflitos."
       );
     }
 
-    // Definir cookie de sessão na resposta com configurações corretas
+    // Definir cookie de sessão na resposta usando a função utilitária
     console.log("[AdminLogin] Definindo cookie de sessão");
-    const isProd = process.env.NODE_ENV === "production";
-    console.log(
-      `[AdminLogin] Ambiente: ${isProd ? "Produção" : "Desenvolvimento"}`
+    setSessionCookieInResponse(
+      response.cookies,
+      ADMIN_COOKIE_NAME,
+      token,
+      expires
     );
-
-    // Configurações adicionais para ambiente de produção
-    let cookieConfig: any = {
-      name: "admin_session",
-      value: token,
-      httpOnly: true,
-      expires,
-      path: "/",
-      sameSite: "strict",
-      secure: isProd,
-      priority: "high",
-    };
-
-    // Em produção, adicionar configurações extras se necessário
-    if (isProd && process.env.COOKIE_DOMAIN) {
-      console.log(
-        `[AdminLogin] Adicionando domínio: ${process.env.COOKIE_DOMAIN}`
-      );
-      cookieConfig.domain = process.env.COOKIE_DOMAIN;
-    }
-
-    response.cookies.set(cookieConfig);
 
     // Verificar se o cookie foi realmente definido
     const wasSet = JSON.stringify(response.cookies.getAll()).includes(
-      '"name":"admin_session"'
+      `"name":"${ADMIN_COOKIE_NAME}"`
     );
     console.log(
       `[AdminLogin] Verificação: Cookie definido? ${wasSet ? "Sim" : "Não"}`

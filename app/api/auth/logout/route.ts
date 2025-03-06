@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth/session";
+import {
+  ADMIN_COOKIE_NAME,
+  clearSessionCookieInResponse,
+} from "@/lib/auth/cookie-utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar qual cookie está sendo usado
-    const sessionCookie = request.cookies.get("admin_session");
+    const sessionCookie = request.cookies.get(ADMIN_COOKIE_NAME);
 
     // Criar resposta
     const response = NextResponse.json({ success: true });
@@ -45,36 +49,12 @@ export async function POST(request: NextRequest) {
         console.log("[Auth/Logout] Erro ao verificar sessão:", error);
       }
 
-      // Configurações para remover o cookie
-      const isProd = process.env.NODE_ENV === "production";
-      console.log(
-        `[Auth/Logout] Ambiente: ${isProd ? "Produção" : "Desenvolvimento"}`
-      );
-
-      // Configuração base para remoção do cookie
-      let cookieConfig: any = {
-        name: "admin_session",
-        value: "",
-        expires: new Date(0),
-        path: "/",
-        sameSite: "strict",
-        secure: isProd,
-      };
-
-      // Em produção, adicionar domain se configurado
-      if (isProd && process.env.COOKIE_DOMAIN) {
-        console.log(
-          `[Auth/Logout] Adicionando domínio: ${process.env.COOKIE_DOMAIN}`
-        );
-        cookieConfig.domain = process.env.COOKIE_DOMAIN;
-      }
-
-      // Limpar o cookie de admin
-      console.log("[Auth/Logout] Removendo cookie 'admin_session'");
-      response.cookies.set(cookieConfig);
+      // Limpar o cookie de admin usando a função utilitária
+      console.log(`[Auth/Logout] Removendo cookie '${ADMIN_COOKIE_NAME}'`);
+      clearSessionCookieInResponse(response.cookies, ADMIN_COOKIE_NAME);
     } else {
       console.log(
-        "[Auth/Logout] Nenhum cookie 'admin_session' encontrado para logout"
+        `[Auth/Logout] Nenhum cookie '${ADMIN_COOKIE_NAME}' encontrado para logout`
       );
     }
 
@@ -118,7 +98,7 @@ export async function GET(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
 
     // Verificar qual cookie está sendo usado
-    const sessionCookie = request.cookies.get("admin_session");
+    const sessionCookie = request.cookies.get(ADMIN_COOKIE_NAME);
 
     // Criar resposta de redirecionamento para a página inicial
     const response = NextResponse.redirect(`${baseUrl}/`);
@@ -134,36 +114,12 @@ export async function GET(request: NextRequest) {
         console.log("[Auth/Logout] Erro ao verificar sessão:", error);
       }
 
-      // Configurações para remover o cookie
-      const isProd = process.env.NODE_ENV === "production";
-      console.log(
-        `[Auth/Logout] Ambiente: ${isProd ? "Produção" : "Desenvolvimento"}`
-      );
-
-      // Configuração base para remoção do cookie
-      let cookieConfig: any = {
-        name: "admin_session",
-        value: "",
-        expires: new Date(0),
-        path: "/",
-        sameSite: "strict",
-        secure: isProd,
-      };
-
-      // Em produção, adicionar domain se configurado
-      if (isProd && process.env.COOKIE_DOMAIN) {
-        console.log(
-          `[Auth/Logout] Adicionando domínio: ${process.env.COOKIE_DOMAIN}`
-        );
-        cookieConfig.domain = process.env.COOKIE_DOMAIN;
-      }
-
-      // Limpar o cookie de admin
-      console.log("[Auth/Logout] Removendo cookie 'admin_session'");
-      response.cookies.set(cookieConfig);
+      // Limpar o cookie de admin usando a função utilitária
+      console.log(`[Auth/Logout] Removendo cookie '${ADMIN_COOKIE_NAME}'`);
+      clearSessionCookieInResponse(response.cookies, ADMIN_COOKIE_NAME);
     } else {
       console.log(
-        "[Auth/Logout] Nenhum cookie 'admin_session' encontrado para logout"
+        `[Auth/Logout] Nenhum cookie '${ADMIN_COOKIE_NAME}' encontrado para logout`
       );
     }
 

@@ -24,6 +24,7 @@ import {
   validatedAction,
   validatedActionWithUser,
 } from "@/lib/auth/middleware";
+import { ADMIN_COOKIE_NAME, clearSessionCookie } from "@/lib/auth/cookie-utils";
 
 async function logActivity(
   teamId: number | null | undefined,
@@ -31,16 +32,17 @@ async function logActivity(
   type: ActivityType,
   ipAddress?: string
 ) {
-  if (teamId === null || teamId === undefined) {
-    return;
+  try {
+    await db.insert(activityLogs).values({
+      teamId: teamId || 0,
+      userId,
+      action: type,
+      timestamp: new Date(),
+      ipAddress: ipAddress || null,
+    });
+  } catch (error) {
+    console.error("Erro ao registrar atividade:", error);
   }
-  const newActivity: NewActivityLog = {
-    teamId,
-    userId,
-    action: type,
-    ipAddress: ipAddress || "",
-  };
-  await db.insert(activityLogs).values(newActivity);
 }
 
 const signInSchema = z.object({
@@ -126,35 +128,10 @@ export async function signOut() {
 
   const cookieStore = await cookies();
 
-  // Configurações para remover o cookie
-  const isProd = process.env.NODE_ENV === "production";
-  console.log(`[signOut] Ambiente: ${isProd ? "Produção" : "Desenvolvimento"}`);
+  // Limpar o cookie de sessão usando a função utilitária
+  clearSessionCookie(cookieStore, ADMIN_COOKIE_NAME);
 
-  // Configuração para remoção do cookie
-  let cookieOptions: any = {
-    name: "admin_session",
-    value: "",
-    expires: new Date(0),
-    path: "/",
-    sameSite: "strict",
-    secure: isProd,
-  };
-
-  // Em produção, adicionar domain se configurado
-  if (isProd && process.env.COOKIE_DOMAIN) {
-    console.log(
-      `[signOut] Adicionando domínio para remoção: ${process.env.COOKIE_DOMAIN}`
-    );
-    cookieOptions.domain = process.env.COOKIE_DOMAIN;
-  }
-
-  // Remover o cookie
-  cookieStore.set(cookieOptions);
-  console.log("[signOut] Cookie 'admin_session' removido");
-
-  // Use a URL absoluta baseada na variável de ambiente ou fallback para caminho relativo
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-  redirect(`${baseUrl}/sign-in`);
+  redirect("/sign-in");
 }
 
 const updatePasswordSchema = z
@@ -245,7 +222,7 @@ export const deleteAccount = validatedActionWithUser(
     }
 
     const cookieStore = await cookies();
-    cookieStore.delete("admin_session");
+    cookieStore.delete(ADMIN_COOKIE_NAME);
 
     redirect("/sign-in");
   }

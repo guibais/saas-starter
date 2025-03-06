@@ -1,20 +1,25 @@
 "use client";
 
 import { User } from "@/lib/db/schema";
+import {
+  ADMIN_COOKIE_NAME,
+  getClientCookieClearingScript,
+} from "./cookie-utils";
 
 // Funções de sessão específicas para o cliente
 export async function getClientUser() {
   try {
-    console.log("[getClientUser] Fazendo requisição para /api/auth/user");
-
-    // Chamar a API para obter o usuário
+    console.log("[getClientUser] Verificando se há usuário autenticado");
     const response = await fetch("/api/auth/user", {
-      credentials: "include",
-      cache: "no-store",
-      next: { revalidate: 0 },
+      method: "GET",
+      credentials: "include", // Importante para enviar cookies
     });
 
-    console.log("[getClientUser] Status da resposta:", response.status);
+    // Se não estiver autenticado, retornar null
+    if (response.status === 401) {
+      console.log("[getClientUser] Usuário não autenticado");
+      return null;
+    }
 
     if (!response.ok) {
       console.log("[getClientUser] Resposta não-ok:", response.status);
@@ -50,9 +55,7 @@ export async function logoutClient() {
       );
 
       // Também tentar limpar o cookie no lado do cliente como backup
-      // Em alguns browsers isso pode falhar devido a restrições, mas é uma camada extra de segurança
-      document.cookie =
-        "admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+      document.cookie = getClientCookieClearingScript(ADMIN_COOKIE_NAME);
 
       console.log("[logoutClient] Processo de logout concluído");
       return true;

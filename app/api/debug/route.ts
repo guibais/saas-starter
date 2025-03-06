@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSession, getCustomerSession } from "@/lib/auth/session";
+import {
+  ADMIN_COOKIE_NAME,
+  CUSTOMER_COOKIE_NAME,
+} from "@/lib/auth/cookie-utils";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +21,8 @@ export async function GET(request: NextRequest) {
         name: cookie.name,
         value: "***", // Ocultar valores por segurança
       })),
-      hasSessionCookie: cookieStore.has("admin_session"),
-      hasCustomerSessionCookie: cookieStore.has("customer_session"),
+      hasSessionCookie: cookieStore.has(ADMIN_COOKIE_NAME),
+      hasCustomerSessionCookie: cookieStore.has(CUSTOMER_COOKIE_NAME),
       adminSessionValid: adminSession !== null,
       customerSessionValid: customerSession !== null,
       adminSession: adminSession

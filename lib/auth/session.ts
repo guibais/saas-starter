@@ -1,24 +1,24 @@
-import { compare, hash } from "bcryptjs";
-import { SignJWT, jwtVerify } from "jose";
-import { NewUser, User } from "@/lib/db/schema";
 import { cookies } from "next/headers";
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { SignJWT, jwtVerify } from "jose";
+import { User } from "@/lib/db/schema";
+import { ADMIN_COOKIE_NAME, setSessionCookie } from "./cookie-utils";
+import { hash, compare } from "bcryptjs";
 
+// Secret key for JWT signing/verification
 const key = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "fallback-secret-key-for-development-only"
+  process.env.JWT_SECRET || "your-secret-key-at-least-32-characters"
 );
 
+// Password hashing functions
 export async function hashPassword(password: string) {
-  return hash(password, 10);
+  return await hash(password, 10);
 }
 
 export async function comparePasswords(
   plainTextPassword: string,
   hashedPassword: string
 ) {
-  return compare(plainTextPassword, hashedPassword);
+  return await compare(plainTextPassword, hashedPassword);
 }
 
 export type SessionData = {
@@ -55,7 +55,7 @@ export async function getSession() {
   try {
     // Get the session cookie from request headers
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("admin_session");
+    const sessionCookie = cookieStore.get(ADMIN_COOKIE_NAME);
 
     if (!sessionCookie) return null;
 
@@ -69,7 +69,7 @@ export async function getSession() {
 
     return session;
   } catch (error) {
-    console.error("Error getting session:", error);
+    console.error("[Auth] Error getting session:", error);
     return null;
   }
 }
@@ -198,7 +198,7 @@ export async function setSession(user: User) {
   // Set the session cookie with production-safe settings
   const cookieStore = await cookies();
   cookieStore.set({
-    name: "admin_session",
+    name: ADMIN_COOKIE_NAME,
     value: token,
     httpOnly: true,
     path: "/",
@@ -213,7 +213,7 @@ export async function setSession(user: User) {
   });
 
   console.log(
-    `[setSession] Cookie "admin_session" definido para ${
+    `[setSession] Cookie "${ADMIN_COOKIE_NAME}" definido para ${
       user.id
     } com configurações para ${isProd ? "produção" : "desenvolvimento"}`
   );

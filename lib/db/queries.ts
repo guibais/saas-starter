@@ -5,18 +5,17 @@ import { verifyToken } from "@/lib/auth/session";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { ADMIN_COOKIE_NAME } from "@/lib/auth/cookie-utils";
 
 // Server-side function to get the current user from a request object
 export async function getUserFromRequest(request: Request) {
   try {
-    // Extract the cookie from the request headers
-    const cookieHeader = request.headers.get("cookie");
-    if (!cookieHeader) return null;
-
-    // Parse the cookie string to find the session cookie
+    // Get the cookie header from the request
+    const cookieHeader = request.headers.get("cookie") || "";
     const cookies = parseCookies(cookieHeader);
-    const sessionCookie = cookies["admin_session"];
 
+    // Check for the session cookie
+    const sessionCookie = cookies[ADMIN_COOKIE_NAME];
     if (!sessionCookie) return null;
 
     // Verify the token and get the user
