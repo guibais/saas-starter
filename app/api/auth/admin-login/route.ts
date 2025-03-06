@@ -8,6 +8,11 @@ import { comparePasswords, signToken } from "@/lib/auth/session";
 export async function POST(request: NextRequest) {
   try {
     console.log("[AdminLogin] Iniciando processo de login administrativo");
+
+    // Verificar referenciador para diagnóstico
+    const referer = request.headers.get("referer");
+    console.log(`[AdminLogin] Referer: ${referer || "Nenhum"}`);
+
     const { email, password } = await request.json();
 
     if (!email || !password) {
@@ -78,10 +83,19 @@ export async function POST(request: NextRequest) {
       name: user.name,
       email: user.email,
       role: user.role,
+      success: true,
     });
 
     // Garantir que quaisquer cookies antigos sejam removidos
     response.cookies.delete("session");
+
+    // Verificar se já existia um cookie de cliente
+    const customerSessionCookie = request.cookies.get("customer_session");
+    if (customerSessionCookie) {
+      console.log(
+        "[AdminLogin] NOTA: Cookie de cliente já existe. Isso pode causar conflitos."
+      );
+    }
 
     // Definir cookie de sessão na resposta com configurações corretas
     console.log("[AdminLogin] Definindo cookie de sessão");
@@ -97,9 +111,18 @@ export async function POST(request: NextRequest) {
       priority: "high",
     });
 
+    // Verificar se o cookie foi realmente definido
+    const wasSet = JSON.stringify(response.cookies.getAll()).includes(
+      '"name":"session"'
+    );
+    console.log(
+      `[AdminLogin] Verificação: Cookie definido? ${wasSet ? "Sim" : "Não"}`
+    );
+
     console.log(
       "[AdminLogin] Cookie de sessão definido, login concluído com sucesso"
     );
+
     return response;
   } catch (error) {
     console.error("[AdminLogin] Erro no login administrativo:", error);

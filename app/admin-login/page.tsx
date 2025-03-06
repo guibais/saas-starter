@@ -27,6 +27,12 @@ const formSchema = z.object({
 export default function AdminLoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+  const addDebugInfo = (info: string) => {
+    console.log(info);
+    setDebugInfo((prev) => [...prev, info]);
+  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -39,27 +45,64 @@ export default function AdminLoginPage() {
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsLoading(true);
     try {
+      addDebugInfo(`[AdminLogin] Iniciando login com email: ${data.email}`);
+
       const response = await fetch("/api/auth/admin-login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
+        // Importante: não seguir redirecionamentos automaticamente
+        redirect: "manual",
       });
+
+      addDebugInfo(
+        `[AdminLogin] Resposta do servidor: status ${response.status}`
+      );
 
       if (!response.ok) {
         const error = await response.json();
+        addDebugInfo(
+          `[AdminLogin] Erro na resposta: ${error.message || "Desconhecido"}`
+        );
         throw new Error(error.message || "Falha ao fazer login");
       }
 
+      // Verificar resposta e cookies
+      const userData = await response.json();
+      addDebugInfo(
+        `[AdminLogin] Login bem-sucedido para usuário: ${userData.id} (${userData.role})`
+      );
+
+      // Verificar se há redirecionamento
+      if (response.redirected) {
+        addDebugInfo(
+          `[AdminLogin] Redirecionamento detectado para: ${response.url}`
+        );
+      }
+
       toast.success("Login efetuado com sucesso!");
+
+      // Configurar um atraso curto antes do redirecionamento
+      addDebugInfo(`[AdminLogin] Aguardando 500ms antes de redirecionar...`);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Redirecionar para o dashboard administrativo
+      addDebugInfo(`[AdminLogin] Redirecionando para /dashboard/admin...`);
       router.push("/dashboard/admin");
+
+      // Evitar o refresh imediato, que pode causar problemas com o estado dos cookies
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      addDebugInfo(
+        `[AdminLogin] Executando router.refresh() após redirecionamento`
+      );
       router.refresh();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Erro ao fazer login"
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro ao fazer login";
+      addDebugInfo(`[AdminLogin] Erro: ${errorMessage}`);
+      toast.error(errorMessage);
       console.error("Erro de login:", error);
     } finally {
       setIsLoading(false);
@@ -115,6 +158,16 @@ export default function AdminLoginPage() {
               </Button>
             </form>
           </Form>
+
+          {/* Debug info - apenas em desenvolvimento */}
+          {process.env.NODE_ENV !== "production" && debugInfo.length > 0 && (
+            <div className="mt-4 p-2 bg-gray-100 rounded text-xs font-mono overflow-auto max-h-48">
+              <h4 className="font-bold mb-1">Debug:</h4>
+              {debugInfo.map((info, i) => (
+                <div key={i}>{info}</div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

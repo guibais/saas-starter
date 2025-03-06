@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CircleIcon, Home, LogOut } from "lucide-react";
 import {
@@ -16,17 +16,61 @@ import { User } from "@/lib/db/schema";
 import Image from "next/image";
 import { logoutClient } from "@/lib/auth/client-session";
 
+// Controle para evitar logout automático no carregamento inicial
+const PREVENT_AUTO_LOGOUT_KEY = "prevent_auto_logout";
+
 export function DashboardHeader({ user }: { user: User | null }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const router = useRouter();
 
+  // Efeito para proteção contra logout automático
+  useEffect(() => {
+    // Verificar se estamos em um carregamento inicial e se acabamos de fazer login
+    const isRecentLogin =
+      document.referrer &&
+      (document.referrer.includes("/login") ||
+        document.referrer.includes("/sign-in") ||
+        document.referrer.includes("/admin-login"));
+
+    if (isRecentLogin) {
+      console.log(
+        "[DashboardHeader] Detectado acesso após tela de login. Bloqueando possível logout automático."
+      );
+      // Definir token para prevenir logout automático
+      sessionStorage.setItem(PREVENT_AUTO_LOGOUT_KEY, "true");
+    }
+
+    // Marcar que não é mais o carregamento inicial
+    setIsInitialLoad(false);
+  }, []);
+
   async function handleSignOut() {
+    // Verificar se estamos em uma prevenção de logout automático
+    const preventAutoLogout = sessionStorage.getItem(PREVENT_AUTO_LOGOUT_KEY);
+
+    if (preventAutoLogout && isInitialLoad) {
+      console.log(
+        "[DashboardHeader] Prevenção de logout automático ativada. Ignorando solicitação de logout."
+      );
+      sessionStorage.removeItem(PREVENT_AUTO_LOGOUT_KEY);
+      return;
+    }
+
+    console.log("[DashboardHeader] Executando logout manual");
     const success = await logoutClient();
     if (success) {
       router.refresh();
       router.push("/");
     }
   }
+
+  // Se for um carregamento inicial e o usuário existir, verifique se não estamos em um ciclo de logout
+  useEffect(() => {
+    if (isInitialLoad && user) {
+      console.log("[DashboardHeader] Usuário autenticado detectado:", user.id);
+    }
+  }, [user, isInitialLoad]);
 
   return (
     <header className="border-b border-gray-200">

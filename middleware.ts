@@ -19,6 +19,10 @@ export async function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   log(`[Middleware] Processando rota: ${pathname}`);
 
+  // Log do referrer para depurar redirecionamentos
+  const referer = request.headers.get("referer");
+  log(`[Middleware] Referer: ${referer || "Nenhum"}`);
+
   const sessionCookie = request.cookies.get("session");
   const customerSessionCookie = request.cookies.get("customer_session");
 
@@ -30,6 +34,19 @@ export async function middleware(request: NextRequest) {
   const isProtectedRoute = pathname.startsWith(protectedRoutes);
   const isAdminRoute = pathname.startsWith(adminRoutes);
   const isCustomerDashboardRoute = pathname.startsWith(customerDashboardRoutes);
+
+  // Verificar se estamos em um fluxo de login-para-admin
+  const isComingFromLogin =
+    referer &&
+    (referer.includes("/login") ||
+      referer.includes("/sign-in") ||
+      referer.includes("/admin-login"));
+
+  if (isComingFromLogin) {
+    log(
+      `[Middleware] Detectado fluxo de login-para-admin. Verificando cookies...`
+    );
+  }
 
   // Se é rota administrativa, dar prioridade ao cookie session
   if (isAdminRoute && sessionCookie) {
@@ -227,6 +244,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  log(`[Middleware] Finalizando processamento para: ${pathname}`);
   return res;
 }
 

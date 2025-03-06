@@ -5,6 +5,29 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[Auth/Logout] Iniciando processo de logout (POST)");
 
+    // Verificar referenciador para detectar logouts não intencionais
+    const referer = request.headers.get("referer");
+    console.log(`[Auth/Logout] Referer: ${referer || "Nenhum"}`);
+
+    // Verificar se é um logout após um login recente (potencialmente não intencional)
+    if (
+      referer &&
+      (referer.includes("/login") ||
+        referer.includes("/sign-in") ||
+        referer.includes("/admin-login"))
+    ) {
+      console.log(
+        "[Auth/Logout] ALERTA: Tentativa de logout imediatamente após login. Possível erro de configuração."
+      );
+      console.log(
+        "[Auth/Logout] Abortando logout para evitar ciclo de autenticação."
+      );
+      return NextResponse.json(
+        { success: false, error: "Logout abortado - detectado após login" },
+        { status: 400 }
+      );
+    }
+
     // Verificar qual cookie está sendo usado
     const sessionCookie = request.cookies.get("session");
 
@@ -50,6 +73,27 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     console.log("[Auth/Logout] Iniciando processo de logout (GET)");
+
+    // Verificar referenciador para detectar logouts não intencionais
+    const referer = request.headers.get("referer");
+    console.log(`[Auth/Logout] Referer: ${referer || "Nenhum"}`);
+
+    // Verificar se é um logout após um login recente (potencialmente não intencional)
+    if (
+      referer &&
+      (referer.includes("/login") ||
+        referer.includes("/sign-in") ||
+        referer.includes("/admin-login"))
+    ) {
+      console.log(
+        "[Auth/Logout] ALERTA: Tentativa de logout imediatamente após login. Possível erro de configuração."
+      );
+      console.log(
+        "[Auth/Logout] Abortando logout para evitar ciclo de autenticação."
+      );
+      // Redirecionar para o dashboard admin em vez de fazer logout
+      return NextResponse.redirect(new URL("/dashboard/admin", request.url));
+    }
 
     // Determinar a URL base para redirecionamento
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
