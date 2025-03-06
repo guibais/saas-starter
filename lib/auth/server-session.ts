@@ -110,14 +110,16 @@ export async function setSession(user: User) {
 
   // Set the session cookie
   const cookieStore = await cookies();
+  const isProd = process.env.NODE_ENV === "production";
+
   cookieStore.set({
     name: "admin_session",
     value: token,
     httpOnly: true,
     path: "/",
-    // secure: process.env.NODE_ENV === "production",
+    secure: isProd,
     maxAge: 60 * 60 * 24, // 1 day in seconds
-    sameSite: "lax",
+    sameSite: "strict",
     priority: "high",
   });
 

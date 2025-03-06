@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
         value: "",
         expires: new Date(0),
         path: "/",
-        sameSite: "lax",
-        // secure: isProd,
+        sameSite: "strict",
+        secure: isProd,
       };
 
       // Em produção, adicionar domain se configurado
@@ -146,8 +146,8 @@ export async function GET(request: NextRequest) {
         value: "",
         expires: new Date(0),
         path: "/",
-        sameSite: "lax",
-        // secure: isProd,
+        sameSite: "strict",
+        secure: isProd,
       };
 
       // Em produção, adicionar domain se configurado

@@ -111,8 +111,8 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       expires,
       path: "/",
-      sameSite: "lax",
-      // secure: isProd,
+      sameSite: "strict",
+      secure: isProd,
       priority: "high",
     };
 

@@ -105,7 +105,7 @@ export async function middleware(request: NextRequest) {
           value: "",
           expires: new Date(0),
           path: "/",
-          sameSite: "lax",
+          sameSite: "strict",
           secure: isProd,
         };
 
@@ -165,7 +165,7 @@ export async function middleware(request: NextRequest) {
           httpOnly: true,
           expires: expiresInOneDay,
           path: "/",
-          sameSite: "lax",
+          sameSite: "strict",
           secure: isProd,
           priority: "high",
         };
@@ -239,16 +239,19 @@ export async function middleware(request: NextRequest) {
 
         const newToken = await signToken(updatedSession);
 
-        res.cookies.set({
+        // Configurações para o cookie de cliente
+        const cookieOptions: any = {
           name: "customer_session",
           value: newToken,
           httpOnly: true,
           expires: expiresInOneDay,
           path: "/",
-          sameSite: "lax",
+          sameSite: "strict",
           secure: process.env.NODE_ENV === "production",
           priority: "high",
-        });
+        };
+
+        res.cookies.set(cookieOptions);
 
         log(
           `[Middleware] Sessão de cliente renovada com sucesso. Nova expiração: ${expiresInOneDay.toISOString()}`

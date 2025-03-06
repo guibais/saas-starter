@@ -87,8 +87,8 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       expires,
       path: "/",
-      sameSite: "lax",
-      // secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
       // Garantir que o cookie não seja removido por redirecionamentos subsequentes
       priority: "high",
     });

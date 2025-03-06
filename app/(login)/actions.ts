@@ -136,7 +136,7 @@ export async function signOut() {
     value: "",
     expires: new Date(0),
     path: "/",
-    sameSite: "lax",
+    sameSite: "strict",
     secure: isProd,
   };
 
