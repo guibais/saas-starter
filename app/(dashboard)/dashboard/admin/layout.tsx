@@ -1,18 +1,23 @@
-"use client";
-
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { redirect } from "next/navigation";
+import { getUser } from "@/lib/db/queries";
 
-// Removendo o componente Breadcrumb duplicado
+// Layout admin deve ser dinâmico para evitar erros de autenticação
+export const dynamic = "force-dynamic";
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  // Verificar autenticação diretamente no layout
+  const user = await getUser();
+
+  // Redirecionar se não for admin ou não estiver autenticado
+  if (!user || user.role !== "admin") {
+    console.error("[AdminLayout] Usuário não autenticado ou não é admin");
+    redirect("/sign-in");
+  }
 
   return (
     <div className="w-full">

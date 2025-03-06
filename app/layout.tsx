@@ -22,7 +22,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let userPromise = getUser();
+  const userPromise = getUser().then((user) => user || null);
 
   return (
     <html lang="pt-BR" suppressHydrationWarning className={inter.className}>

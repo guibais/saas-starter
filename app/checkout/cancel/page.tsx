@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import { XCircle } from "lucide-react";
+import { XCircle, Loader2 } from "lucide-react";
 
-export default function CheckoutCancelPage() {
+function CheckoutCancelContent() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,5 +83,29 @@ export default function CheckoutCancelPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function CheckoutCancelPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container max-w-4xl py-12">
+          <Card className="mx-auto">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Pagamento Cancelado</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center space-y-6">
+              <div className="flex flex-col items-center space-y-4 py-8">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-lg">Carregando...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <CheckoutCancelContent />
+    </Suspense>
   );
 }
