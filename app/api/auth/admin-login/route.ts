@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       expires,
       path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
     });
 
     console.log("Cookie de sessão definido, login concluído com sucesso");

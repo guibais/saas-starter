@@ -67,6 +67,8 @@ export async function middleware(request: NextRequest) {
           httpOnly: true,
           expires: expiresInOneDay,
           path: "/",
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
         });
       }
     } catch (error) {
@@ -109,6 +111,8 @@ export async function middleware(request: NextRequest) {
           httpOnly: true,
           expires: expiresInOneDay,
           path: "/",
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
         });
       }
     } catch (error) {
