@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useRef, ChangeEvent, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { uploadImage, STORAGE_BUCKETS } from "@/lib/supabase/client";
+import { STORAGE_BUCKETS } from "@/lib/cloudflare/r2";
 import { atom, useAtom } from "jotai";
 import { Upload, X, Image as ImageIcon, Crop as CropIcon } from "lucide-react";
 import {
@@ -13,6 +13,14 @@ import {
   cropperImageSrcAtom,
   cropperResultAtom,
 } from "./image-cropper";
+import { toast } from "react-hot-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Atoms para gerenciar o estado do editor de imagem
 export const imageFileAtom = atom<File | null>(null);
@@ -23,8 +31,9 @@ export const imageErrorAtom = atom<string | null>(null);
 
 interface ImageUploadProps {
   onImageUploaded?: (url: string) => void;
+  onUploadStarted?: () => void;
   defaultImage?: string;
-  bucket?: string;
+  folder?: string;
   label?: string;
   description?: string;
   aspectRatio?: number;
@@ -33,8 +42,9 @@ interface ImageUploadProps {
 
 export function ImageUpload({
   onImageUploaded,
+  onUploadStarted,
   defaultImage = "",
-  bucket = STORAGE_BUCKETS.PRODUCTS,
+  folder = STORAGE_BUCKETS.PRODUCTS,
   label = "Imagem",
   description = "Faça upload de uma imagem para o produto",
   aspectRatio,
@@ -43,7 +53,7 @@ export function ImageUpload({
   const [imageFile, setImageFile] = useAtom(imageFileAtom);
   const [imagePreview, setImagePreview] = useAtom(imagePreviewAtom);
   const [imageUrl, setImageUrl] = useAtom(imageUrlAtom);
-  const [isLoading, setIsLoading] = useAtom(imageLoadingAtom);
+  const [isUploading, setIsUploading] = useAtom(imageLoadingAtom);
   const [error, setError] = useAtom(imageErrorAtom);
 
   const [cropperOpen, setCropperOpen] = useAtom(cropperOpenAtom);
@@ -53,12 +63,13 @@ export function ImageUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Inicializa o preview com a imagem padrão, se fornecida
-  useState(() => {
+  useEffect(() => {
+    console.log("Inicializando imagem padrão:", defaultImage);
     if (defaultImage && !imagePreview) {
-      setImagePreview(defaultImage);
       setImageUrl(defaultImage);
+      setImagePreview(defaultImage);
     }
-  });
+  }, [defaultImage, imagePreview, setImagePreview, setImageUrl]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,6 +103,9 @@ export function ImageUpload({
           // Usar a imagem diretamente
           setImageFile(file);
           setImagePreview(previewUrl);
+
+          // Iniciar upload automaticamente
+          uploadImageFile(file);
         }
       }
     };
@@ -107,9 +121,71 @@ export function ImageUpload({
     reader.onload = (event) => {
       if (event.target?.result) {
         setImagePreview(event.target.result as string);
+
+        // Iniciar upload automaticamente após recorte
+        uploadImageFile(croppedFile);
       }
     };
     reader.readAsDataURL(croppedFile);
+  };
+
+  // Função para processar o upload da imagem
+  const uploadImageFile = async (file: File) => {
+    try {
+      setIsUploading(true);
+      onUploadStarted?.();
+
+      // Criar FormData para envio
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", folder);
+
+      // Enviar para a API de upload (servidor)
+      const response = await fetch("/api/r2/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Erro na resposta da API:", data.error);
+        toast.error("Falha ao fazer upload da imagem. Tente novamente.");
+        setIsUploading(false);
+        return;
+      }
+
+      const { url } = data;
+
+      if (url.startsWith("__r2_error__")) {
+        console.error("Erro no R2:", url);
+        toast.error(
+          "Falha na conexão com o servidor de armazenamento. Tente novamente mais tarde."
+        );
+        setIsUploading(false);
+        return;
+      }
+
+      // Verificar se é uma URL especial de armazenamento
+      if (url.startsWith("__r2_storage__")) {
+        // Mostrar mensagem informando que a imagem será processada posteriormente
+        toast.success("Imagem enviada, mas será processada em segundo plano.");
+        console.log("URL especial de armazenamento:", url);
+      } else {
+        // URL normal, mostrar preview
+        setImagePreview(url);
+      }
+
+      // Atualizar estados
+      setImageUrl(url);
+      setIsUploading(false);
+      onImageUploaded?.(url);
+      toast.success("Imagem enviada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao fazer upload da imagem:", error);
+      toast.error("Falha ao fazer upload da imagem. Tente novamente.");
+      setIsUploading(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -118,26 +194,7 @@ export function ImageUpload({
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const { url, error } = await uploadImage(bucket, imageFile);
-
-      if (error) {
-        throw error;
-      }
-
-      setImageUrl(url);
-      if (onImageUploaded) {
-        onImageUploaded(url);
-      }
-    } catch (err) {
-      setError("Erro ao fazer upload da imagem. Tente novamente.");
-      console.error("Upload error:", err);
-    } finally {
-      setIsLoading(false);
-    }
+    await uploadImageFile(imageFile);
   };
 
   const handleRemoveImage = () => {
@@ -203,7 +260,7 @@ export function ImageUpload({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2">
         <Input
           id="image-upload"
           type="file"
@@ -212,19 +269,17 @@ export function ImageUpload({
           ref={fileInputRef}
           className="max-w-md"
         />
-        <Button
-          type="button"
-          onClick={handleUpload}
-          disabled={!imageFile || isLoading}
-          className="sm:w-auto"
-        >
-          {isLoading ? "Enviando..." : "Enviar Imagem"}
-          {!isLoading && <Upload className="ml-2 h-4 w-4" />}
-        </Button>
+
+        {isUploading && (
+          <div className="flex items-center text-sm text-amber-500">
+            <Upload className="animate-pulse mr-2 h-4 w-4" />
+            Enviando imagem... Por favor, aguarde.
+          </div>
+        )}
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {imageUrl && !error && (
+      {imageUrl && !error && !isUploading && (
         <p className="text-sm text-green-600">Imagem enviada com sucesso!</p>
       )}
 

@@ -440,3 +440,41 @@ The checkout process uses Zustand stores for state management:
 - **Leverage Existing Code**: Adapt and extend existing functionality rather than rebuilding
 
 This implementation plan provides a comprehensive roadmap for adapting the existing SaaS starter into a dual-purpose e-commerce platform that offers both subscription-based and individual fruit purchases. By leveraging the existing codebase and extending it with new features, we can efficiently create a modern, user-friendly platform that serves the Brazilian market effectively, with Zustand and Jotai providing efficient state management solutions.
+
+## Configuração do Cloudflare R2 para Armazenamento de Imagens
+
+Para utilizar o Cloudflare R2 como solução de armazenamento de imagens, siga estas etapas:
+
+1. Crie uma conta no Cloudflare e ative o serviço R2
+2. Crie os seguintes buckets:
+
+   - `products` - Para imagens de produtos
+   - `plans` - Para imagens dos planos
+   - `profiles` - Para imagens de perfil
+
+3. Configure as variáveis de ambiente:
+
+   ```
+   CLOUDFLARE_ACCOUNT_ID=seu-account-id
+   R2_ACCESS_KEY_ID=sua-access-key
+   R2_SECRET_ACCESS_KEY=sua-secret-key
+   R2_PUBLIC_URL=https://seu-bucket-publico.r2.dev
+   ```
+
+4. Para tornar os buckets públicos (opcional, mas recomendado para imagens):
+   - Acesse o painel do Cloudflare
+   - Vá para R2 > Buckets
+   - Selecione o bucket
+   - Clique em "Settings" > "Public Access"
+   - Ative "Set bucket as public"
+   - Copie o URL público e use-o como `R2_PUBLIC_URL` nas variáveis de ambiente
+5. Alternativa: Configurar um domínio personalizado com o Cloudflare
+   - Configure um domínio personalizado para apontar para seus buckets R2
+   - Use esse domínio como base para o `R2_PUBLIC_URL`
+
+O R2 foi configurado como alternativa ao Supabase Storage por oferecer:
+
+- Melhor desempenho global
+- Integrações nativas com o Cloudflare CDN
+- Compatibilidade com a API S3 da AWS
+- Preços mais acessíveis para tráfego de saída

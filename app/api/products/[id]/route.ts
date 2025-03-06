@@ -89,7 +89,51 @@ export async function PATCH(
     if (body.description !== undefined)
       updateData.description = body.description;
     if (body.price !== undefined) updateData.price = body.price.toString();
-    if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
+    if (body.imageUrl !== undefined) {
+      // Verificar se é uma URL especial do R2
+      if (body.imageUrl && body.imageUrl.startsWith("__r2_storage__:")) {
+        console.log("URL do R2 recebida:", body.imageUrl);
+
+        // Verificar se é um caso especial onde a URL completa foi prefixada
+        if (
+          body.imageUrl.includes("https://") ||
+          body.imageUrl.includes("http://")
+        ) {
+          // Extrair apenas a parte após "__r2_storage__:"
+          const actualUrl = body.imageUrl.replace("__r2_storage__:", "");
+
+          // Para URLs no formato __r2_storage__:https::dominio/caminho
+          // Corrigir o formato dos dois pontos extras após https:
+          updateData.imageUrl = actualUrl
+            .replace(/^https::(.*)/i, "https://$1")
+            .replace(/^http::(.*)/i, "http://$1");
+        } else {
+          // Caso tradicional do formato __r2_storage__:bucket:path
+          const parts = body.imageUrl.split(":");
+          if (parts.length >= 3) {
+            const bucket = parts[1];
+            const filePath = parts.slice(2).join(":");
+            // Reconstruir a URL pública do R2
+            const r2PublicUrl = process.env.R2_PUBLIC_URL || "";
+
+            // Remover barras extras para construção limpa da URL
+            const baseUrl = r2PublicUrl.endsWith("/")
+              ? r2PublicUrl.slice(0, -1)
+              : r2PublicUrl;
+            const path = filePath.startsWith("/")
+              ? filePath.slice(1)
+              : filePath;
+
+            updateData.imageUrl = `${baseUrl}/${bucket}/${path}`;
+          } else {
+            updateData.imageUrl = body.imageUrl;
+          }
+        }
+        console.log("URL do R2 processada:", updateData.imageUrl);
+      } else {
+        updateData.imageUrl = body.imageUrl;
+      }
+    }
     if (body.productType !== undefined)
       updateData.productType = body.productType;
     if (body.stockQuantity !== undefined)

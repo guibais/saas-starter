@@ -14,6 +14,7 @@ import {
   Calendar,
   AlertCircle,
 } from "lucide-react";
+import React, { use } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,8 @@ export default function UserDetailsPage({
   params: { id: string };
 }) {
   const router = useRouter();
+  const unwrappedParams = use(params as any) as { id: string };
+  const userId = unwrappedParams.id;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -83,11 +86,11 @@ export default function UserDetailsPage({
   const [orders, setOrders] = useState<Order[]>([]);
 
   useEffect(() => {
-    const loadData = async () => {
+    const fetchUserDetails = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/users/${params.id}`);
+        const response = await fetch(`/api/users/${userId}`);
 
         if (response.status === 401) {
           // Redirecionar para a página de login administrativo
@@ -114,8 +117,8 @@ export default function UserDetailsPage({
       }
     };
 
-    loadData();
-  }, [params.id, router]);
+    fetchUserDetails();
+  }, [userId, router]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";

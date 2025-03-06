@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         description: validatedData.description || null,
         price: validatedData.price.toString(),
-        imageUrl: validatedData.imageUrl || null,
+        imageUrl: processImageUrl(validatedData.imageUrl),
         productType: validatedData.productType,
         stockQuantity: validatedData.stockQuantity,
         isAvailable: validatedData.isAvailable,
@@ -167,5 +167,60 @@ export async function POST(request: NextRequest) {
       { error: "Erro ao criar produto" },
       { status: 500 }
     );
+  }
+}
+
+// Função auxiliar para processar URLs do R2
+function processImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  try {
+    // Verificar se é uma URL especial do R2
+    if (url.startsWith("__r2_storage__:")) {
+      console.log("URL do R2 recebida:", url);
+
+      // Verificar se é um caso especial onde a URL completa foi prefixada
+      if (url.includes("https://") || url.includes("http://")) {
+        // Extrair apenas a parte após "__r2_storage__:"
+        const actualUrl = url.replace("__r2_storage__:", "");
+
+        // Para URLs no formato __r2_storage__:https::dominio/caminho
+        // Corrigir o formato dos dois pontos extras após https:
+        return actualUrl
+          .replace(/^https::(.*)/i, "https://$1")
+          .replace(/^http::(.*)/i, "http://$1");
+      }
+
+      // Caso tradicional do formato __r2_storage__:bucket:path
+      const parts = url.split(":");
+      if (parts.length >= 3) {
+        const bucket = parts[1];
+        const filePath = parts.slice(2).join(":");
+        // Reconstruir a URL pública do R2
+        const r2PublicUrl = process.env.R2_PUBLIC_URL || "";
+
+        // Remover barras extras para construção limpa da URL
+        const baseUrl = r2PublicUrl.endsWith("/")
+          ? r2PublicUrl.slice(0, -1)
+          : r2PublicUrl;
+        const path = filePath.startsWith("/") ? filePath.slice(1) : filePath;
+
+        const processedUrl = `${baseUrl}/${bucket}/${path}`;
+        console.log("URL do R2 processada:", processedUrl);
+        return processedUrl;
+      }
+    }
+
+    // Verificar se é uma URL de erro
+    if (url.startsWith("__r2_error__:")) {
+      console.error("URL com erro do R2:", url);
+      // Optamos por retornar null para não salvar URLs inválidas
+      return null;
+    }
+
+    return url;
+  } catch (error) {
+    console.error("Erro ao processar URL da imagem:", error);
+    return url; // Em caso de erro, mantém a URL original
   }
 }

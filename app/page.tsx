@@ -13,6 +13,7 @@ import { HeroSection } from "@/components/home/hero-section";
 import { FeaturedPlans } from "@/components/home/featured-plans";
 import { TestimonialCard } from "@/components/home/testimonial-card";
 import { AnimatedCTA } from "@/components/home/animated-cta";
+import { FaqSection, defaultFaqItems } from "@/components/faq-section";
 
 // Definindo interfaces para os tipos de dados
 interface Plan {
@@ -222,12 +223,6 @@ export default async function HomePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-              {/* Linha conectora (apenas para desktop) */}
-              <div
-                className="hidden md:block absolute top-24 left-[20%] right-[20%] h-0.5 bg-green-600"
-                aria-hidden="true"
-              />
-
               {[
                 {
                   number: 1,
@@ -357,6 +352,14 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* FAQ Section */}
+        <FaqSection
+          faqItems={defaultFaqItems}
+          bgColor="white"
+          title="Perguntas Frequentes"
+          description="Tire suas dúvidas sobre o Tudo Fresco, nossos planos e como funciona nossa assinatura."
+        />
 
         {/* CTA Section */}
         <AnimatedCTA />

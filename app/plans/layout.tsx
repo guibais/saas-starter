@@ -1,7 +1,7 @@
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 
-export default function PlansLayout({
+export default async function PlansLayout({
   children,
 }: {
   children: React.ReactNode;

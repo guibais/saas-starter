@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db/drizzle";
+import { z } from "zod";
+import { slugify } from "@/lib/utils";
+import { getSession } from "@/lib/auth/session";
+import { db } from "@/lib/db";
 import {
   subscriptionPlans,
   planFixedItems,
   planCustomizableItems,
-  products,
   userSubscriptions,
+  products,
 } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth/session";
-import { eq, and } from "drizzle-orm";
-import { z } from "zod";
-import { slugify } from "@/lib/utils";
+import { and, eq } from "drizzle-orm";
 
-// Schema de validação para atualização de planos
+// Schema de validação para atualização de plano
 const planUpdateSchema = z.object({
-  name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres").optional(),
+  name: z.string().min(1, "Nome é obrigatório").optional(),
   description: z.string().optional(),
   price: z.number().positive("Preço deve ser positivo").optional(),
   imageUrl: z.string().optional(),
@@ -22,7 +22,7 @@ const planUpdateSchema = z.object({
     .array(
       z.object({
         id: z.number().optional(),
-        productId: z.number().positive(),
+        productId: z.number(),
         quantity: z.number().positive(),
       })
     )
@@ -31,15 +31,64 @@ const planUpdateSchema = z.object({
     .object({
       normal: z.object({
         min: z.number().min(0),
-        max: z.number().positive(),
+        max: z.number().min(0),
       }),
       exotic: z.object({
         min: z.number().min(0),
-        max: z.number().positive(),
+        max: z.number().min(0),
       }),
     })
     .optional(),
 });
+
+// Processar URLs especiais do R2
+function processR2Url(url: string): string {
+  // Se não houver URL, retorna null
+  if (!url) return url;
+
+  // Se a URL já for uma URL completa e não for uma URL especial de armazenamento, retorná-la como está
+  if (
+    !url.startsWith("__r2_storage__:") &&
+    (url.startsWith("http") || url.startsWith("https"))
+  ) {
+    return url;
+  }
+
+  if (url.startsWith("__r2_storage__:")) {
+    console.log("URL do R2 recebida:", url);
+    try {
+      // Verificar se é um caso especial onde a URL completa foi prefixada
+      if (url.includes("https://") || url.includes("http://")) {
+        // Extrair apenas a parte após "__r2_storage__:"
+        const actualUrl = url.replace("__r2_storage__:", "");
+
+        // Para URLs no formato __r2_storage__:https::dominio/caminho
+        // Corrigir o formato dos dois pontos extras após https:
+        return actualUrl
+          .replace(/^https::(.*)/i, "https://$1")
+          .replace(/^http::(.*)/i, "http://$1");
+      }
+
+      // Caso tradicional do formato __r2_storage__:bucket:path
+      const parts = url.split(":");
+      if (parts.length >= 3) {
+        const bucket = parts.find((part) =>
+          part.includes(
+            process.env.R2_PUBLIC_URL?.replace("https://", "") ?? ""
+          )
+        );
+        console.log({ bucket, env: process.env.R2_PUBLIC_URL });
+        const processedUrl = `https://${bucket}`;
+        return processedUrl;
+      }
+    } catch (error) {
+      console.error("Erro ao processar URL do R2:", error);
+    }
+  }
+
+  // Em caso de erro ou formato não reconhecido, retorna a URL original
+  return url;
+}
 
 // GET /api/plans/[id] - Obter detalhes de um plano específico
 export async function GET(
@@ -47,13 +96,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Verificar autenticação
-    const session = await getSession();
-    if (!session || session.user.role !== "admin") {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-    }
+    const { id } = await params;
+    const planId = parseInt(id);
 
-    const planId = parseInt(params.id);
+    if (isNaN(planId)) {
+      return NextResponse.json(
+        { error: "ID de plano inválido" },
+        { status: 400 }
+      );
+    }
 
     // Buscar plano
     const plan = await db
@@ -145,7 +196,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const planId = parseInt(params.id);
+    const { id } = await params;
+    const planId = parseInt(id);
+
+    if (isNaN(planId)) {
+      return NextResponse.json(
+        { error: "ID de plano inválido" },
+        { status: 400 }
+      );
+    }
 
     // Verificar se o plano existe
     const existingPlan = await db
@@ -161,17 +220,21 @@ export async function PATCH(
       );
     }
 
-    // Obter e validar dados do corpo da requisição
+    // Obter e validar os dados do body
     const body = await request.json();
-    const validationResult = planUpdateSchema.safeParse(body);
+    console.log("Corpo da requisição recebido:", body);
 
+    // Validar com o schema
+    const validationResult = planUpdateSchema.safeParse(body);
     if (!validationResult.success) {
+      console.log("Erro de validação:", validationResult.error.format());
       return NextResponse.json(
         { error: "Dados inválidos", details: validationResult.error.format() },
         { status: 400 }
       );
     }
 
+    // Extrair valores validados
     const {
       name,
       description,
@@ -181,8 +244,10 @@ export async function PATCH(
       customizableRules,
     } = validationResult.data;
 
+    console.log("URL da imagem recebida:", imageUrl);
+
     // Iniciar transação para garantir consistência dos dados
-    const result = await db.transaction(async (tx) => {
+    return await db.transaction(async (tx) => {
       // Atualizar o plano
       const updateData: any = {
         updatedAt: new Date(),
@@ -202,7 +267,8 @@ export async function PATCH(
       }
 
       if (imageUrl !== undefined) {
-        updateData.imageUrl = imageUrl;
+        console.log("Atualizando imageUrl para:", imageUrl);
+        updateData.imageUrl = processR2Url(imageUrl);
       }
 
       // Atualizar o plano
@@ -211,6 +277,8 @@ export async function PATCH(
         .set(updateData)
         .where(eq(subscriptionPlans.id, planId))
         .returning();
+
+      console.log("Plano atualizado:", updatedPlan);
 
       // Atualizar itens fixos se fornecidos
       if (fixedItems) {
@@ -235,41 +303,68 @@ export async function PATCH(
 
       // Atualizar regras de customização se fornecidas
       if (customizableRules) {
-        // Atualizar regra para produtos normais
-        await tx
-          .update(planCustomizableItems)
-          .set({
+        // Certificar que as regras existem
+        const existingRules = await tx
+          .select()
+          .from(planCustomizableItems)
+          .where(eq(planCustomizableItems.planId, planId));
+
+        // Se não houver regras, criar
+        if (existingRules.length === 0) {
+          // Inserir regra para normal
+          await tx.insert(planCustomizableItems).values({
+            planId,
+            productType: "normal",
             minQuantity: customizableRules.normal.min,
             maxQuantity: customizableRules.normal.max,
+            createdAt: new Date(),
             updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(planCustomizableItems.planId, planId),
-              eq(planCustomizableItems.productType, "normal")
-            )
-          );
+          });
 
-        // Atualizar regra para produtos exóticos
-        await tx
-          .update(planCustomizableItems)
-          .set({
+          // Inserir regra para exotic
+          await tx.insert(planCustomizableItems).values({
+            planId,
+            productType: "exotic",
             minQuantity: customizableRules.exotic.min,
             maxQuantity: customizableRules.exotic.max,
+            createdAt: new Date(),
             updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(planCustomizableItems.planId, planId),
-              eq(planCustomizableItems.productType, "exotic")
-            )
-          );
+          });
+        } else {
+          // Atualizar regra para produtos normais
+          await tx
+            .update(planCustomizableItems)
+            .set({
+              minQuantity: customizableRules.normal.min,
+              maxQuantity: customizableRules.normal.max,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(planCustomizableItems.planId, planId),
+                eq(planCustomizableItems.productType, "normal")
+              )
+            );
+
+          // Atualizar regra para produtos exóticos
+          await tx
+            .update(planCustomizableItems)
+            .set({
+              minQuantity: customizableRules.exotic.min,
+              maxQuantity: customizableRules.exotic.max,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(planCustomizableItems.planId, planId),
+                eq(planCustomizableItems.productType, "exotic")
+              )
+            );
+        }
       }
 
-      return updatedPlan;
+      return NextResponse.json(updatedPlan);
     });
-
-    return NextResponse.json(result);
   } catch (error) {
     console.error("Erro ao atualizar plano:", error);
     return NextResponse.json(
@@ -291,7 +386,15 @@ export async function DELETE(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const planId = parseInt(params.id);
+    const { id } = await params;
+    const planId = parseInt(id);
+
+    if (isNaN(planId)) {
+      return NextResponse.json(
+        { error: "ID de plano inválido" },
+        { status: 400 }
+      );
+    }
 
     // Verificar se o plano existe
     const existingPlan = await db

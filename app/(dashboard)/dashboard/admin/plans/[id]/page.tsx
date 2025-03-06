@@ -34,7 +34,11 @@ import {
 import { ArrowLeft, Loader2, Trash, Plus, Minus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { ImageUpload } from "@/components/ui/image-upload";
-import React from "react";
+import React, { use } from "react";
+import { uploadImage, STORAGE_BUCKETS } from "@/lib/cloudflare/r2";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 interface FixedItem {
   id?: number;
@@ -71,12 +75,14 @@ interface Product {
 
 export default function EditPlanPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const planId = params.id;
-  const [activeTab, setActiveTab] = useState("basic");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const unwrappedParams = use(params as any) as { id: string };
+  const planId = unwrappedParams.id;
+  const [activeTab, setActiveTab] = useState<string>("info");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState<boolean>(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [isImageUploading, setIsImageUploading] = useState<boolean>(false);
   const [formData, setFormData] = useState<PlanFormData>({
     name: "",
     description: "",
@@ -114,52 +120,28 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
     const loadPlan = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/plans/${params.id}`);
+        const response = await fetch(`/api/plans/${planId}`);
         if (!response.ok) {
-          throw new Error("Falha ao carregar plano");
+          throw new Error("Erro ao carregar dados do plano");
         }
         const planData = await response.json();
 
-        // Processar as regras de customização
-        const customizableRules = {
-          normal: { min: 0, max: 0 },
-          exotic: { min: 0, max: 0 },
-        };
-
-        // Se customizableRules for um array, processar cada regra
-        if (Array.isArray(planData.customizableRules)) {
-          planData.customizableRules.forEach((rule: any) => {
-            if (rule.productType === "normal") {
-              customizableRules.normal.min = rule.minQuantity;
-              customizableRules.normal.max = rule.maxQuantity;
-            } else if (rule.productType === "exotic") {
-              customizableRules.exotic.min = rule.minQuantity;
-              customizableRules.exotic.max = rule.maxQuantity;
-            }
-          });
-        }
-
-        // Processar os itens fixos
-        const fixedItems = planData.fixedItems.map((item: any) => ({
-          id: item.id,
-          productId: item.productId,
-          quantity: item.quantity,
-          productName: item.productName || "",
-          productPrice: item.productPrice || "",
-          productType: item.productType || "",
-        }));
-
+        // Definir os dados do plano no formulário
         setFormData({
           name: planData.name,
           description: planData.description || "",
           price: planData.price,
-          imageUrl: planData.imageUrl || "",
-          fixedItems,
-          customizableRules,
+          imageUrl: planData.imageUrl || "", // Garantir que a URL da imagem seja carregada corretamente
+          fixedItems: planData.fixedItems.map((item: any) => ({
+            id: item.id,
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+          customizableRules: planData.customizableRules,
         });
       } catch (error) {
-        toast.error("Erro ao carregar plano");
-        console.error(error);
+        console.error("Erro ao carregar plano:", error);
+        toast.error("Erro ao carregar dados do plano");
       } finally {
         setIsLoading(false);
       }
@@ -228,65 +210,111 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
     }));
   };
 
-  const handleImageUploaded = (url: string) => {
-    setFormData((prev) => ({ ...prev, imageUrl: url }));
+  const handleImageUploaded = async (imageUrl: string) => {
+    console.log("Imagem carregada:", imageUrl);
+    setFormData((prev) => ({ ...prev, imageUrl }));
+    setIsImageUploading(false);
+
+    // Verificar se a URL da imagem é válida com uma requisição
+    try {
+      const response = await fetch(imageUrl, { method: "HEAD" });
+      if (!response.ok) {
+        console.error(
+          "URL da imagem pode não ser acessível:",
+          response.status,
+          response.statusText
+        );
+        toast.warning(
+          "A imagem foi carregada, mas pode haver problemas de permissão. Verifique após salvar."
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao verificar URL da imagem:", error);
+    }
+  };
+
+  const handleImageUploadStarted = () => {
+    setIsImageUploading(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
+
+    // Verificar se existe um upload em andamento
+    if (isImageUploading) {
+      toast.error("Aguarde o upload da imagem ser concluído antes de salvar.");
+      return;
+    }
+
+    // Validar os dados do formulário
+    if (!formData.name) {
+      toast.error("Nome do plano é obrigatório");
+      return;
+    }
+
+    if (!formData.price || parseFloat(String(formData.price)) <= 0) {
+      toast.error("Preço deve ser maior que zero");
+      return;
+    }
+
+    // Validar itens fixos
+    if (
+      formData.fixedItems.some((item) => !item.productId || item.quantity <= 0)
+    ) {
+      toast.error(
+        "Todos os itens fixos devem ter um produto selecionado e quantidade maior que zero"
+      );
+      return;
+    }
 
     try {
-      // Validar dados
-      if (!formData.name || !formData.price) {
-        throw new Error("Nome e preço são obrigatórios");
-      }
+      setIsSaving(true);
 
-      // Converter preço para número
-      const priceValue = parseFloat(formData.price);
-      if (isNaN(priceValue) || priceValue <= 0) {
-        throw new Error("Preço deve ser um número positivo");
-      }
-
-      // Validar itens fixos
-      for (const item of formData.fixedItems) {
-        if (!item.productId || item.productId <= 0) {
-          throw new Error("Selecione um produto válido para cada item fixo");
-        }
-        if (!item.quantity || item.quantity <= 0) {
-          throw new Error(
-            "Quantidade deve ser maior que zero para cada item fixo"
-          );
-        }
-      }
-
-      // Preparar dados para envio
-      // Nota: O formato para atualização (PATCH) é diferente do formato para criação (POST)
-      // Na atualização, customizableRules deve ser um objeto com normal e exotic
-      // Na criação, customizableRules deve ser um array de objetos com productType, minQuantity e maxQuantity
+      // Preparar payload
       const payload = {
         name: formData.name,
         description: formData.description,
-        price: priceValue,
+        price: parseFloat(formData.price),
         imageUrl: formData.imageUrl,
-        fixedItems: formData.fixedItems.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
-        customizableRules: {
-          normal: {
-            min: formData.customizableRules.normal.min,
-            max: formData.customizableRules.normal.max,
-          },
-          exotic: {
-            min: formData.customizableRules.exotic.min,
-            max: formData.customizableRules.exotic.max,
-          },
-        },
+        fixedItems: formData.fixedItems,
+        customizableRules: formData.customizableRules,
       };
 
-      // Enviar para a API
-      const response = await fetch(`/api/plans/${params.id}`, {
+      // Se a imagem estiver com a URL completa do R2,
+      // vamos armazenar apenas o caminho relativo para o backend usar o client do lado do servidor
+      if (
+        payload.imageUrl &&
+        payload.imageUrl.includes(
+          process.env.NEXT_PUBLIC_R2_PUBLIC_URL || ""
+        ) &&
+        payload.imageUrl.includes("/")
+      ) {
+        try {
+          // Extrair o caminho relativo da URL do R2
+          const baseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
+          const urlWithoutBase = payload.imageUrl.replace(`${baseUrl}/`, "");
+          const pathParts = urlWithoutBase.split("/");
+
+          if (pathParts.length > 1) {
+            const bucket = pathParts[0];
+            const filePath = pathParts.slice(1).join("/");
+
+            // Adicionar metadados para o backend saber que precisa reconstruir a URL
+            payload.imageUrl = `__r2_storage__:${bucket}:${filePath}`;
+            console.log(
+              "URL da imagem convertida para formato de storage:",
+              payload.imageUrl
+            );
+          }
+        } catch (err) {
+          console.error("Erro ao processar URL da imagem:", err);
+          // Manter a URL original em caso de erro
+        }
+      }
+
+      // Enviar requisição
+      console.log("Enviando payload:", JSON.stringify(payload, null, 2));
+      const response = await fetch(`/api/plans/${planId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -294,18 +322,19 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
+      // Verificar resposta
+      if (response.ok) {
+        toast.success("Plano atualizado com sucesso!");
+        router.refresh();
+      } else {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao atualizar plano");
+        toast.error(
+          `Erro ao salvar plano: ${errorData.error || "Erro desconhecido"}`
+        );
       }
-
-      toast.success("Plano atualizado com sucesso");
-      router.push("/dashboard/admin/plans");
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Erro ao atualizar plano"
-      );
-      console.error(error);
+      console.error("Erro ao salvar plano:", error);
+      toast.error("Ocorreu um erro ao salvar o plano");
     } finally {
       setIsSaving(false);
     }
@@ -315,7 +344,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/plans/${params.id}`, {
+      const response = await fetch(`/api/plans/${planId}`, {
         method: "DELETE",
       });
 
@@ -338,13 +367,13 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
   };
 
   const handleNextTab = () => {
-    if (activeTab === "basic") setActiveTab("fixed");
+    if (activeTab === "info") setActiveTab("fixed");
     else if (activeTab === "fixed") setActiveTab("customizable");
   };
 
   const handlePrevTab = () => {
     if (activeTab === "customizable") setActiveTab("fixed");
-    else if (activeTab === "fixed") setActiveTab("basic");
+    else if (activeTab === "fixed") setActiveTab("info");
   };
 
   if (isLoading) {
@@ -357,44 +386,49 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" asChild>
-            <Link href="/dashboard/admin/plans">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Editar Plano: {formData.name}
-          </h1>
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Editar Plano</h1>
+          <p className="text-muted-foreground">
+            Atualize as informações do plano
+          </p>
         </div>
-        <Button
-          variant="destructive"
-          onClick={() => setIsDeleteDialogOpen(true)}
-          disabled={isSaving}
-        >
-          <Trash className="mr-2 h-4 w-4" />
-          Excluir Plano
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/admin/plans")}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => setIsDeleteDialogOpen(true)}
+          >
+            Excluir
+          </Button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit}>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="basic">Informações Básicas</TabsTrigger>
+            <TabsTrigger value="info">Informações Básicas</TabsTrigger>
             <TabsTrigger value="fixed">Itens Fixos</TabsTrigger>
             <TabsTrigger value="customizable">
               Itens Personalizáveis
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="basic" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <TabsContent value="info" className="mt-6">
+            <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Informações do Plano</CardTitle>
+                    <CardTitle>Informações Básicas</CardTitle>
+                    <CardDescription>
+                      Informe os detalhes principais do plano
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
@@ -449,21 +483,28 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
               </div>
 
               <div className="space-y-6">
-                <Card>
+                <Card className="mb-6">
                   <CardHeader>
                     <CardTitle>Imagem do Plano</CardTitle>
                     <CardDescription>
-                      Faça upload de uma imagem para representar o plano
+                      Faça upload de uma imagem para representar este plano
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ImageUpload
                       onImageUploaded={handleImageUploaded}
+                      onUploadStarted={handleImageUploadStarted}
                       defaultImage={formData.imageUrl}
-                      bucket="plans"
+                      folder={STORAGE_BUCKETS.PLANS}
                       label="Imagem do Plano"
-                      description="Faça upload de uma imagem para representar o plano"
+                      description="Uma imagem atraente para mostrar o plano aos clientes"
+                      aspectRatio={16 / 9}
                     />
+                    {isImageUploading && (
+                      <p className="mt-2 text-sm text-orange-500">
+                        Upload em andamento, aguarde antes de salvar...
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -722,7 +763,7 @@ export default function EditPlanPage({ params }: { params: { id: string } }) {
                 <Button type="button" variant="outline" onClick={handlePrevTab}>
                   Voltar: Itens Fixos
                 </Button>
-                <Button type="submit" disabled={isSaving}>
+                <Button type="submit" disabled={isSaving || isImageUploading}>
                   {isSaving && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}

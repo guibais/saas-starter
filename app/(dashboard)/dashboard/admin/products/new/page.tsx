@@ -22,9 +22,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Upload, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, Save, Loader2, Plus } from "lucide-react";
 import { ImageUpload } from "@/components/ui/image-upload";
-import { STORAGE_BUCKETS } from "@/lib/supabase/client";
+import { STORAGE_BUCKETS } from "@/lib/cloudflare/r2";
 import { toast } from "sonner";
 
 interface ProductFormData {
@@ -231,7 +231,7 @@ export default function NewProductPage() {
                 <Label>Imagem do Produto</Label>
                 <ImageUpload
                   onImageUploaded={handleImageUploaded}
-                  bucket={STORAGE_BUCKETS.PRODUCTS}
+                  folder={STORAGE_BUCKETS.PRODUCTS}
                   label="Imagem do Produto"
                   description="Faça upload de uma imagem para o produto (recomendado: 800x600px)"
                   aspectRatio={4 / 3}

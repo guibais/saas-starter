@@ -11,7 +11,39 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function SiteFooter() {
+// Interface para os planos
+interface Plan {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+// Função para buscar planos da API
+async function getFooterPlans(): Promise<Plan[]> {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL || ""}/api/plans?limit=4`,
+      {
+        cache: "no-store",
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Falha ao carregar planos para o footer");
+    }
+
+    const data = await response.json();
+    return data.plans || [];
+  } catch (error) {
+    console.error("Erro ao buscar planos para o footer:", error);
+    return [];
+  }
+}
+
+export async function SiteFooter() {
+  // Buscar planos da API
+  const footerPlans = await getFooterPlans();
+
   return (
     <footer
       className="bg-green-900 text-white pt-16 pb-8"
@@ -118,42 +150,31 @@ export function SiteFooter() {
               Planos
             </h3>
             <ul className="space-y-3">
-              <li>
-                <Link
-                  href="/plans#plano-basico"
-                  className="text-green-50 hover:text-white transition-colors flex items-center"
-                >
-                  <ArrowRight className="h-3 w-3 mr-2" aria-hidden="true" />
-                  Plano Básico
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/plans#plano-premium"
-                  className="text-green-50 hover:text-white transition-colors flex items-center"
-                >
-                  <ArrowRight className="h-3 w-3 mr-2" aria-hidden="true" />
-                  Plano Premium
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/plans#plano-familia"
-                  className="text-green-50 hover:text-white transition-colors flex items-center"
-                >
-                  <ArrowRight className="h-3 w-3 mr-2" aria-hidden="true" />
-                  Plano Família
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/plans#plano-exotico"
-                  className="text-green-50 hover:text-white transition-colors flex items-center"
-                >
-                  <ArrowRight className="h-3 w-3 mr-2" aria-hidden="true" />
-                  Plano Exótico
-                </Link>
-              </li>
+              {footerPlans.length > 0 ? (
+                footerPlans.map((plan) => (
+                  <li key={plan.id}>
+                    <Link
+                      href={`/plans/${plan.slug}`}
+                      className="text-green-50 hover:text-white transition-colors flex items-center"
+                    >
+                      <ArrowRight className="h-3 w-3 mr-2" aria-hidden="true" />
+                      {plan.name}
+                    </Link>
+                  </li>
+                ))
+              ) : (
+                <>
+                  <li>
+                    <Link
+                      href="/plans"
+                      className="text-green-50 hover:text-white transition-colors flex items-center"
+                    >
+                      <ArrowRight className="h-3 w-3 mr-2" aria-hidden="true" />
+                      Ver Todos os Planos
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
 
@@ -248,8 +269,8 @@ export function SiteFooter() {
                 className="bg-green-700 hover:bg-green-600 transition-colors"
               >
                 <Link href="/plans" className="flex items-center gap-2">
-                  Assine agora
-                  <ArrowRight size={16} aria-hidden="true" />
+                  Ver Todos os Planos
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </Button>
             </div>

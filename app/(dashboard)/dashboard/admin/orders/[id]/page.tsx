@@ -38,6 +38,7 @@ import {
   AlertTriangle,
   Ban,
 } from "lucide-react";
+import React, { use } from "react";
 
 interface OrderItem {
   id: number;
@@ -94,12 +95,14 @@ export default function OrderDetailsPage({
   const [newPaymentStatus, setNewPaymentStatus] = useState("");
   const router = useRouter();
   const { toast } = useToast();
+  const unwrappedParams = use(params as any) as { id: string };
+  const orderId = unwrappedParams.id;
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/orders/${params.id}`);
+        const response = await fetch(`/api/orders/${orderId}`);
         if (!response.ok) {
           throw new Error("Falha ao carregar detalhes do pedido");
         }
@@ -118,7 +121,7 @@ export default function OrderDetailsPage({
     };
 
     fetchOrderDetails();
-  }, [params.id, toast]);
+  }, [orderId, toast]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -226,7 +229,7 @@ export default function OrderDetailsPage({
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/orders/${params.id}`, {
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -277,7 +280,7 @@ export default function OrderDetailsPage({
 
     setIsUpdating(true);
     try {
-      const response = await fetch(`/api/orders/${params.id}`, {
+      const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -320,6 +323,21 @@ export default function OrderDetailsPage({
       });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const markAsDelivered = async () => {
+    // ... existing code ...
+
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        // ... rest of fetch configuration ...
+      });
+
+      // ... rest of function ...
+    } catch (error) {
+      // ... error handling ...
     }
   };
 

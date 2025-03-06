@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Ban,
 } from "lucide-react";
+import React, { use } from "react";
 
 interface OrderItem {
   id: number;
@@ -76,12 +77,14 @@ export default function OrderDetailsPage({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const unwrappedParams = use(params as any) as { id: string };
+  const orderId = unwrappedParams.id;
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/orders/${params.id}`);
+        const response = await fetch(`/api/orders/${orderId}`);
         if (!response.ok) {
           throw new Error("Falha ao carregar detalhes do pedido");
         }
@@ -100,7 +103,7 @@ export default function OrderDetailsPage({
     };
 
     fetchOrderDetails();
-  }, [params.id, toast]);
+  }, [orderId, toast]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

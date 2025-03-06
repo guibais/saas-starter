@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, Trash2 } from "lucide-react";
+import React, { use } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageUpload } from "@/components/ui/image-upload";
-import { STORAGE_BUCKETS } from "@/lib/supabase/client";
+import { Badge } from "@/components/ui/badge";
+import { STORAGE_BUCKETS } from "@/lib/cloudflare/r2";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +51,8 @@ export default function EditProductPage({
   params: { id: string };
 }) {
   const router = useRouter();
-  const productId = params.id; // Usando diretamente, mas com uma variável separada
+  const unwrappedParams = use(params as any) as { id: string };
+  const productId = unwrappedParams.id;
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -339,7 +342,7 @@ export default function EditProductPage({
                 <ImageUpload
                   onImageUploaded={handleImageUploaded}
                   defaultImage={formData.imageUrl}
-                  bucket={STORAGE_BUCKETS.PRODUCTS}
+                  folder={STORAGE_BUCKETS.PRODUCTS}
                   label="Imagem do Produto"
                   description="Faça upload de uma imagem para o produto. Recomendamos uma imagem de alta qualidade com fundo branco."
                   aspectRatio={1}
