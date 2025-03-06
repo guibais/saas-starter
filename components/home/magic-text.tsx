@@ -17,7 +17,7 @@ export function MagicText({
     hidden: {},
     visible: {
       transition: {
-        staggerChildren: 0.02,
+        staggerChildren: 0.015,
         delayChildren: delay,
       },
     },
@@ -27,16 +27,20 @@ export function MagicText({
     hidden: {},
     visible: {
       transition: {
-        staggerChildren: 0.02,
+        staggerChildren: 0.015,
       },
     },
   };
 
   const childVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 10 },
     visible: {
       opacity: 1,
       y: 0,
+      transition: {
+        duration: 0.3,
+        ease: "easeOut",
+      },
     },
   };
 
@@ -46,17 +50,21 @@ export function MagicText({
       variants={containerVariants}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true }}
+      viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
       style={{ display: "inline-flex", flexWrap: "wrap" }}
     >
       {words.map((word, wordIndex) => (
         <motion.span
           key={wordIndex}
-          className="mr-1 inline-flex whitespace-pre-wrap"
+          className="mr-1 mb-1 inline-flex whitespace-pre-wrap"
           variants={wordVariants}
         >
           {Array.from(word).map((char, charIndex) => (
-            <motion.span key={charIndex} variants={childVariants}>
+            <motion.span
+              key={charIndex}
+              variants={childVariants}
+              className="inline-block"
+            >
               {char}
             </motion.span>
           ))}
