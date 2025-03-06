@@ -1,7 +1,7 @@
 import "./globals.css";
 import { Inter } from "next/font/google";
 import { UserProvider } from "@/lib/auth";
-import { getUser } from "@/lib/db/queries";
+import { getServerUser } from "@/lib/auth/server-session";
 import { AuthProvider } from "@/lib/state/AuthProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { constructMetadata } from "./metadata";
@@ -22,7 +22,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const userPromise = getUser().then((user) => user || null);
+  const userPromise = getServerUser().then((user) => user || null);
 
   return (
     <html lang="pt-BR" suppressHydrationWarning className={inter.className}>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getUser } from "@/lib/db/queries";
+import { getServerUser } from "@/lib/auth/server-session";
 
 // Layout admin deve ser dinâmico para evitar erros de autenticação
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   // Verificar autenticação diretamente no layout
-  const user = await getUser();
+  const user = await getServerUser();
 
   // Redirecionar se não for admin ou não estiver autenticado
   if (!user || user.role !== "admin") {

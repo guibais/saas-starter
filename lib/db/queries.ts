@@ -69,8 +69,19 @@ async function getUserFromToken(token: string) {
 // Cached version of getUser for use in Server Components
 export const getUser = cache(async () => {
   try {
-    // Make a request to the API endpoint
-    const response = await fetch("/api/auth/user");
+    // Construir a URL absoluta com base na variável de ambiente
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost:3000");
+    const apiUrl = `${baseUrl}/api/auth/user`;
+
+    // Fazer a requisição para a API
+    const response = await fetch(apiUrl, {
+      cache: "no-store",
+      next: { revalidate: 0 },
+    });
 
     if (!response.ok) return null;
     return await response.json();
