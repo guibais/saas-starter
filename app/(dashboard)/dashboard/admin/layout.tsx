@@ -10,14 +10,25 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  console.log("[AdminLayout] Iniciando verificação de autenticação");
+
   // Verificar autenticação diretamente no layout
   const user = await getServerUser();
+
+  console.log(
+    "[AdminLayout] Resultado da verificação:",
+    user
+      ? `Usuário ID: ${user.id}, Role: ${user.role}`
+      : "Usuário não encontrado"
+  );
 
   // Redirecionar se não for admin ou não estiver autenticado
   if (!user || user.role !== "admin") {
     console.error("[AdminLayout] Usuário não autenticado ou não é admin");
     redirect("/sign-in");
   }
+
+  console.log("[AdminLayout] Autenticação bem-sucedida, renderizando layout");
 
   return (
     <div className="w-full">

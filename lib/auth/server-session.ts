@@ -1,3 +1,5 @@
+"use server";
+
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -8,20 +10,28 @@ import { SessionData, verifyToken, signToken } from "./session";
 // Server-side session operations (for backward compatibility)
 export async function getSession() {
   try {
+    console.log("[getSession] Buscando cookie de sessão");
+
     // Get the session cookie from request headers
     const cookieStore = cookies();
     const sessionCookie = cookieStore.get("session");
 
-    if (!sessionCookie) return null;
+    if (!sessionCookie) {
+      console.log("[getSession] Cookie de sessão não encontrado");
+      return null;
+    }
 
+    console.log("[getSession] Cookie de sessão encontrado, verificando token");
     const sessionToken = sessionCookie.value;
 
     // Verify the token
     const session = await verifyToken(sessionToken);
     if (!session) {
+      console.log("[getSession] Token inválido ou expirado");
       return null;
     }
 
+    console.log("[getSession] Sessão válida encontrada:", session.user?.id);
     return session;
   } catch (error) {
     console.error("Error getting session:", error);
@@ -87,14 +97,32 @@ export async function setSession(user: User) {
 
 // Server-side getUser
 export async function getServerUser() {
+  console.log("[getServerUser] Iniciando busca do usuário a partir da sessão");
+
   const session = await getSession();
+  console.log(
+    "[getServerUser] Sessão encontrada:",
+    session ? `ID: ${session.user?.id}` : "Nenhuma sessão"
+  );
+
   if (!session || !session.user || !session.user.id) {
+    console.log("[getServerUser] Nenhuma sessão válida encontrada");
     return null;
   }
 
+  console.log(
+    `[getServerUser] Buscando usuário ID ${session.user.id} no banco de dados`
+  );
   const user = await db.query.users.findFirst({
     where: eq(users.id, session.user.id),
   });
+
+  console.log(
+    "[getServerUser] Resultado da busca:",
+    user
+      ? `Usuário encontrado: ${user.name || user.email}`
+      : "Usuário não encontrado"
+  );
 
   return user;
 }

@@ -78,20 +78,44 @@ export const getUser = cache(async () => {
         : "http://localhost:3000");
     const apiUrl = `${baseUrl}/api/auth/user`;
 
-    // Fazer a requisição para a API
-    const response = await fetch(apiUrl, {
-      cache: "no-store",
-      next: { revalidate: 0 },
-      credentials: "include",
-      headers: {
-        Cookie: cookies().toString(),
-      },
-    });
+    console.log("[getUser] Chamando API:", apiUrl);
 
-    if (!response.ok) return null;
-    return await response.json();
+    // Diferenciação entre ambiente cliente e servidor
+    if (typeof window !== "undefined") {
+      // Cliente: enviar credentials para incluir cookies automaticamente
+      console.log("[getUser] Ambiente: Cliente");
+      const response = await fetch(apiUrl, {
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      console.log("[getUser] Status da resposta:", response.status);
+      if (!response.ok) return null;
+      return await response.json();
+    } else {
+      // Servidor: precisamos enviar cookies explicitamente
+      console.log("[getUser] Ambiente: Servidor");
+      // Obter cookies do request
+      const cookieHeader = cookies().toString();
+      console.log(
+        "[getUser] Cookies:",
+        cookieHeader ? "Cookies encontrados" : "Nenhum cookie"
+      );
+
+      const response = await fetch(apiUrl, {
+        cache: "no-store",
+        next: { revalidate: 0 },
+        headers: {
+          Cookie: cookieHeader,
+        },
+      });
+
+      console.log("[getUser] Status da resposta:", response.status);
+      if (!response.ok) return null;
+      return await response.json();
+    }
   } catch (error) {
-    console.error("Error getting user:", error);
+    console.error("[getUser] Erro:", error);
     return null;
   }
 });

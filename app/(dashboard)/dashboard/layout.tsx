@@ -23,6 +23,11 @@ import {
   LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CircleIcon } from "lucide-react";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+
+// Forçar renderização dinâmica em todas as páginas do dashboard
+export const dynamic = "force-dynamic";
 
 // Componente de Breadcrumb
 function Breadcrumb() {
@@ -84,11 +89,9 @@ function Breadcrumb() {
   );
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function Layout({ children }: { children: React.ReactNode }) {
+  console.log("[DashboardLayout] Iniciando carregamento do layout");
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const pathname = usePathname();
 
