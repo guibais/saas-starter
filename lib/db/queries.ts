@@ -4,6 +4,7 @@ import { activityLogs, teamMembers, teams, users } from "./schema";
 import { verifyToken } from "@/lib/auth/session";
 import { headers } from "next/headers";
 import { cache } from "react";
+import { cookies } from "next/headers";
 
 // Server-side function to get the current user from a request object
 export async function getUserFromRequest(request: Request) {
@@ -81,6 +82,10 @@ export const getUser = cache(async () => {
     const response = await fetch(apiUrl, {
       cache: "no-store",
       next: { revalidate: 0 },
+      credentials: "include",
+      headers: {
+        Cookie: cookies().toString(),
+      },
     });
 
     if (!response.ok) return null;
