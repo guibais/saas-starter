@@ -38,9 +38,19 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useSubscriptionStore } from "@/lib/state/subscriptionStore";
 import { Checkbox } from "@/components/ui/checkbox";
+// Importar Stripe
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  CardElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 
-// Stripe será instalado posteriormente. Por enquanto, vamos usar uma abordagem mais simples
-// para evitar erros de compilação
+// Carregar Stripe - substitua com sua chave pública
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ""
+);
 
 interface FixedItem {
   id: number;
@@ -81,6 +91,7 @@ interface UserData {
   email: string;
   phone: string;
   address: string;
+  zipCode?: string;
   deliveryInstructions?: string;
 }
 
@@ -90,26 +101,12 @@ const checkoutFormSchema = z.object({
   email: z.string().email("Email inválido"),
   phone: z.string().min(10, "Telefone inválido"),
   address: z.string().min(10, "Endereço deve ser completo"),
+  zipCode: z.string().min(8, "CEP deve ter 8 dígitos"),
   password: z
     .string()
     .min(6, "Senha deve ter pelo menos 6 caracteres")
     .optional(),
   deliveryInstructions: z.string().optional(),
-  // Campos de cartão de crédito
-  cardNumber: z
-    .string()
-    .min(13, "Número do cartão inválido")
-    .max(19, "Número do cartão inválido"),
-  cardName: z
-    .string()
-    .min(3, "Nome no cartão deve ter pelo menos 3 caracteres"),
-  cardExpiry: z
-    .string()
-    .regex(
-      /^(0[1-9]|1[0-2])\/([0-9]{2})$/,
-      "Data de validade inválida (MM/AA)"
-    ),
-  cardCvc: z.string().min(3, "CVC inválido").max(4, "CVC inválido"),
   savePaymentMethod: z.boolean().default(true),
 });
 
@@ -168,7 +165,25 @@ const formatCVC = (value: string) => {
   return numbers.slice(0, 4);
 };
 
-export default function SubscriptionCheckoutPage() {
+// Função para formatar CEP brasileiro (formato: 12345-678)
+const formatCEP = (value: string) => {
+  if (!value) return "";
+
+  // Remover tudo que não for número
+  const numbers = value.replace(/[^\d]/g, "");
+
+  // Limitar a 8 dígitos
+  const trimmed = numbers.slice(0, 8);
+
+  // Adicionar hífen após os primeiros 5 dígitos
+  if (trimmed.length > 5) {
+    return `${trimmed.slice(0, 5)}-${trimmed.slice(5)}`;
+  }
+
+  return trimmed;
+};
+
+function CheckoutForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -182,6 +197,13 @@ export default function SubscriptionCheckoutPage() {
     primaryAction: { label: string; href: string };
     secondaryAction: { label: string; href: string };
   } | null>(null);
+  const [paymentIntentClientSecret, setPaymentIntentClientSecret] =
+    useState("");
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+
+  // Stripe hooks
+  const stripe = useStripe();
+  const elements = useElements();
 
   // Get customizable items from store
   const { customizableItems, getCustomizationTotal, clearCustomization } =
@@ -200,20 +222,31 @@ export default function SubscriptionCheckoutPage() {
       email: "",
       phone: "",
       address: "",
+      zipCode: "",
       password: "",
       deliveryInstructions: "",
-      cardNumber: "",
-      cardName: "",
-      cardExpiry: "",
-      cardCvc: "",
       savePaymentMethod: true,
     },
     mode: "onChange", // Validar ao alterar os campos
   });
 
-  // Verificar autenticação separadamente
+  // Verificar autenticação separadamente e antes de carregar o plano
   useEffect(() => {
-    checkAuth();
+    const initialize = async () => {
+      try {
+        // Verificar autenticação primeiro
+        await checkAuth();
+
+        // Depois de verificar autenticação, buscar plano
+        await fetchSelectedPlan();
+      } catch (error) {
+        console.error("Erro durante a inicialização:", error);
+        setError("Erro ao carregar a página de checkout");
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
   }, []);
 
   // Atualizar o resolver quando o status de autenticação mudar
@@ -222,91 +255,126 @@ export default function SubscriptionCheckoutPage() {
   }, [isAuthenticated, form]);
 
   // Fetch selected plan based on query parameter
-  useEffect(() => {
-    const fetchSelectedPlan = async () => {
-      try {
-        // Get plan ID from query parameter
-        const searchParams = new URLSearchParams(window.location.search);
-        const planSlug = searchParams.get("plan");
-        const success = searchParams.get("success");
+  const fetchSelectedPlan = async () => {
+    try {
+      // Get plan ID from query parameter
+      const searchParams = new URLSearchParams(window.location.search);
+      const planSlug = searchParams.get("plan");
+      const success = searchParams.get("success");
 
-        if (success === "true") {
-          setSuccessMessage({
-            title: "Assinatura realizada com sucesso!",
-            message:
-              "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
-            primaryAction: {
-              label: "Ver minhas assinaturas",
-              href: "/customer/dashboard/subscription",
-            },
-            secondaryAction: {
-              label: "Voltar para a página inicial",
-              href: "/",
-            },
-          });
-          setIsLoading(false);
-          return;
-        }
-
-        if (!planSlug) {
-          setError("Nenhum plano selecionado");
-          setIsLoading(false);
-          return;
-        }
-
-        // Fetch plan details from API
-        const response = await fetch(`/api/plans/slug/${planSlug}`);
-        if (!response.ok) {
-          throw new Error("Falha ao carregar detalhes do plano");
-        }
-
-        const data = await response.json();
-        setSelectedPlan(data);
-        console.log("Plano selecionado carregado:", data);
-
-        // Verificar autenticação primeiro, antes de definir isLoading como false
-        const isAuth = await checkAuth();
-        console.log("Status de autenticação verificado:", isAuth);
-
+      if (success === "true") {
+        setSuccessMessage({
+          title: "Assinatura realizada com sucesso!",
+          message:
+            "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
+          primaryAction: {
+            label: "Ver minhas assinaturas",
+            href: "/customer/dashboard/subscription",
+          },
+          secondaryAction: {
+            label: "Voltar para a página inicial",
+            href: "/",
+          },
+        });
         setIsLoading(false);
-      } catch (error) {
-        console.error("Erro ao carregar plano:", error);
-        setError("Erro ao carregar detalhes do plano");
-        setIsLoading(false);
+        return;
       }
-    };
 
-    fetchSelectedPlan();
-  }, []);
+      if (!planSlug) {
+        setError("Nenhum plano selecionado");
+        setIsLoading(false);
+        return;
+      }
+
+      // Fetch plan details from API
+      const response = await fetch(`/api/plans/slug/${planSlug}`);
+      if (!response.ok) {
+        throw new Error("Falha ao carregar detalhes do plano");
+      }
+
+      const data = await response.json();
+      setSelectedPlan(data);
+      console.log("Plano selecionado carregado:", data);
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Erro ao carregar plano:", error);
+      setError("Erro ao carregar detalhes do plano");
+      setIsLoading(false);
+    }
+  };
 
   // Check if user is authenticated and fill form with user data
   const checkAuth = async () => {
     try {
-      const response = await fetch("/api/customer/check-auth");
+      console.log("Iniciando verificação de autenticação do cliente...");
+
+      // Verificar se o cookie de sessão do cliente existe
+      const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
+      const hasCustomerSession = cookies.some((cookie) =>
+        cookie.startsWith("customer_session=")
+      );
+
+      console.log(
+        "Cookie de sessão do cliente encontrado:",
+        hasCustomerSession
+      );
+
+      const response = await fetch("/api/customer/check-auth", {
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
       const data = await response.json();
 
-      console.log("Verificação de autenticação:", data);
+      console.log("Resposta da API de verificação:", data);
 
       if (data.authenticated) {
         const userDetails = data.user;
+        console.log("Usuário autenticado, detalhes:", userDetails);
+
         setIsAuthenticated(true);
         setUserData(userDetails);
 
-        console.log("Usuário autenticado, dados:", userDetails);
+        // Preencher formulário com os dados do usuário
+        console.log("Preenchendo formulário com dados do usuário");
+        if (userDetails.name) {
+          console.log("Definindo nome:", userDetails.name);
+          form.setValue("name", userDetails.name);
+        }
+        if (userDetails.email) {
+          console.log("Definindo email:", userDetails.email);
+          form.setValue("email", userDetails.email);
+        }
+        if (userDetails.phone) {
+          console.log("Definindo telefone:", userDetails.phone);
+          form.setValue("phone", userDetails.phone);
+        }
+        if (userDetails.address) {
+          console.log("Definindo endereço:", userDetails.address);
+          form.setValue("address", userDetails.address);
+        }
+        if (userDetails.zipCode) {
+          console.log("Definindo CEP:", userDetails.zipCode);
+          form.setValue("zipCode", userDetails.zipCode);
+        }
+        if (userDetails.deliveryInstructions) {
+          console.log(
+            "Definindo instruções de entrega:",
+            userDetails.deliveryInstructions
+          );
+          form.setValue(
+            "deliveryInstructions",
+            userDetails.deliveryInstructions
+          );
+        }
 
-        // Fill form with user data
-        form.setValue("name", userDetails.name || "");
-        form.setValue("email", userDetails.email || "");
-        form.setValue("phone", userDetails.phone || "");
-        form.setValue("address", userDetails.address || "");
-        form.setValue(
-          "deliveryInstructions",
-          userDetails.deliveryInstructions || ""
-        );
-
-        // Foco no primeiro campo que precisa ser preenchido ou no campo de instruções de entrega
+        // Foco no primeiro campo que precisa ser preenchido
         setTimeout(() => {
-          if (!userDetails.address) {
+          if (!userDetails.zipCode) {
+            document.getElementById("zipCode")?.focus();
+          } else if (!userDetails.address) {
             document.getElementById("address")?.focus();
           } else if (!userDetails.phone) {
             document.getElementById("phone")?.focus();
@@ -314,12 +382,50 @@ export default function SubscriptionCheckoutPage() {
             document.getElementById("deliveryInstructions")?.focus();
           }
         }, 500);
-      } else {
-        setIsAuthenticated(false);
-        setUserData(null);
+
+        return true;
+      } else if (hasCustomerSession) {
+        // Se temos cookie mas a API retornou não autenticado, vamos tentar buscar dados do usuário diretamente
+        console.log(
+          "Cookie encontrado mas API retornou não autenticado. Tentando rota alternativa..."
+        );
+
+        try {
+          const userResponse = await fetch("/api/customer/me");
+          const userData = await userResponse.json();
+
+          console.log("Dados do usuário pela rota /api/customer/me:", userData);
+
+          if (userData && !userData.error) {
+            setIsAuthenticated(true);
+            setUserData(userData);
+
+            // Preencher formulário com dados do usuário
+            if (userData.name) form.setValue("name", userData.name);
+            if (userData.email) form.setValue("email", userData.email);
+            if (userData.phone) form.setValue("phone", userData.phone);
+            if (userData.address) form.setValue("address", userData.address);
+            if (userData.zipCode) form.setValue("zipCode", userData.zipCode);
+            if (userData.deliveryInstructions)
+              form.setValue(
+                "deliveryInstructions",
+                userData.deliveryInstructions
+              );
+
+            return true;
+          }
+        } catch (error) {
+          console.error(
+            "Erro ao buscar dados do usuário pela rota alternativa:",
+            error
+          );
+        }
       }
 
-      return data.authenticated;
+      console.log("Usuário não autenticado");
+      setIsAuthenticated(false);
+      setUserData(null);
+      return false;
     } catch (error) {
       console.error("Erro ao verificar autenticação:", error);
       setIsAuthenticated(false);
@@ -344,10 +450,45 @@ export default function SubscriptionCheckoutPage() {
     return planPrice + customizationTotal;
   }, [selectedPlan, getCustomizationTotal]);
 
+  // Criar o Payment Intent
+  const createPaymentIntent = async (planId, customizableItems) => {
+    try {
+      const response = await fetch(
+        "/api/checkout/subscription/create-payment-intent",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            planId,
+            customizableItems,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Erro ao criar payment intent");
+      }
+
+      const data = await response.json();
+      console.log("Payment Intent criado:", data);
+      return data.clientSecret;
+    } catch (error) {
+      console.error("Erro ao criar payment intent:", error);
+      throw error;
+    }
+  };
+
   // Handle form submission
   const onSubmit = async (data: CheckoutFormValues) => {
     console.log("onSubmit iniciado com dados:", data);
-    console.log("Estado de autenticação:", isAuthenticated);
+
+    if (!stripe || !elements) {
+      toast.error("O Stripe não está carregado. Por favor, tente novamente.");
+      return;
+    }
 
     if (!selectedPlan) {
       console.error("Erro: Nenhum plano selecionado");
@@ -367,9 +508,50 @@ export default function SubscriptionCheckoutPage() {
 
     try {
       setIsSubmitting(true);
-      console.log("Estado isSubmitting definido como true");
+      setPaymentProcessing(true);
 
-      // Prepare checkout data
+      // 1. Primeiro criar o Payment Intent
+      let clientSecret;
+      try {
+        clientSecret = await createPaymentIntent(
+          selectedPlan.id,
+          customizableItems
+        );
+        setPaymentIntentClientSecret(clientSecret);
+      } catch (error) {
+        throw new Error(
+          `Erro ao criar intenção de pagamento: ${error.message}`
+        );
+      }
+
+      // 2. Confirmar o pagamento com Stripe
+      const cardElement = elements.getElement(CardElement);
+
+      const { error: stripeError, paymentIntent } =
+        await stripe.confirmCardPayment(clientSecret, {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              name: data.name,
+              email: data.email,
+            },
+          },
+        });
+
+      if (stripeError) {
+        throw new Error(stripeError.message);
+      }
+
+      if (paymentIntent.status !== "succeeded") {
+        throw new Error(
+          `Pagamento não finalizado. Status: ${paymentIntent.status}`
+        );
+      }
+
+      // 3. Agora que o pagamento foi bem-sucedido, processar a assinatura
+      console.log("Pagamento confirmado, processando assinatura...");
+
+      // Prepare checkout data (sem dados do cartão)
       const checkoutData = {
         planId: selectedPlan.id,
         customizableItems,
@@ -378,92 +560,66 @@ export default function SubscriptionCheckoutPage() {
           email: data.email,
           phone: data.phone,
           address: data.address,
+          zipCode: data.zipCode,
           password: isAuthenticated ? undefined : data.password,
           deliveryInstructions: data.deliveryInstructions,
         },
         paymentDetails: {
-          cardNumber: data.cardNumber,
-          cardName: data.cardName,
-          cardExpiry: data.cardExpiry,
-          cardCvc: data.cardCvc,
           savePaymentMethod: data.savePaymentMethod,
         },
         createAccount: !isAuthenticated,
+        paymentIntentId: paymentIntent.id, // Enviar o ID do payment intent confirmado
       };
 
-      // Log para depuração, removendo dados sensíveis
-      console.log("Enviando dados para checkout:", {
+      // Log para depuração
+      console.log("Enviando dados para processo de assinatura:", {
         planId: checkoutData.planId,
-        customizableItems: checkoutData.customizableItems,
+        paymentIntentId: checkoutData.paymentIntentId,
         createAccount: checkoutData.createAccount,
-        isAuthenticated,
-        userDetails: {
-          name: checkoutData.userDetails.name,
-          email: checkoutData.userDetails.email,
-          hasPassword: !!checkoutData.userDetails.password,
-        },
-        hasPaymentInfo: true,
       });
 
-      try {
-        console.log("Iniciando requisição para a API");
-        const response = await fetch(
-          "/api/checkout/subscription/process-payment",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(checkoutData),
-          }
-        );
-        console.log("Resposta da API recebida:", {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
+      const response = await fetch(
+        "/api/checkout/subscription/process-payment",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(checkoutData),
+        }
+      );
+      console.log("Resposta da API recebida:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      });
+
+      const responseData = await response.json();
+      console.log("Dados da resposta da API:", responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.error || "Erro ao processar a assinatura");
+      }
+
+      // Handle successful checkout
+      if (responseData.success) {
+        // Clear customization
+        clearCustomization();
+
+        // Show success message
+        setSuccessMessage({
+          title: "Assinatura realizada com sucesso!",
+          message:
+            "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
+          primaryAction: {
+            label: "Ver minhas assinaturas",
+            href: "/customer/dashboard/subscription",
+          },
+          secondaryAction: {
+            label: "Voltar para a página inicial",
+            href: "/",
+          },
         });
-
-        const responseData = await response.json();
-        console.log("Dados da resposta da API:", responseData);
-
-        if (!response.ok) {
-          console.error("Erro na resposta da API:", {
-            status: response.status,
-            statusText: response.statusText,
-            data: responseData,
-          });
-          throw new Error(responseData.error || "Erro ao processar o checkout");
-        }
-
-        // Handle successful checkout
-        if (responseData.success) {
-          // Clear customization
-          clearCustomization();
-
-          // Show success message
-          setSuccessMessage({
-            title: "Assinatura realizada com sucesso!",
-            message:
-              "Sua assinatura foi processada com sucesso. Você receberá um email com os detalhes.",
-            primaryAction: {
-              label: "Ver minhas assinaturas",
-              href: "/customer/dashboard/subscription",
-            },
-            secondaryAction: {
-              label: "Voltar para a página inicial",
-              href: "/",
-            },
-          });
-        }
-      } catch (error) {
-        console.error("Erro no checkout:", error);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Ocorreu um erro ao processar sua assinatura"
-        );
-      } finally {
-        setIsSubmitting(false);
       }
     } catch (error) {
       console.error("Erro no checkout:", error);
@@ -472,7 +628,9 @@ export default function SubscriptionCheckoutPage() {
           ? error.message
           : "Ocorreu um erro ao processar sua assinatura"
       );
+    } finally {
       setIsSubmitting(false);
+      setPaymentProcessing(false);
     }
   };
 
@@ -647,8 +805,30 @@ export default function SubscriptionCheckoutPage() {
                         <FormControl>
                           <Textarea
                             id="address"
-                            placeholder="Rua, número, bairro, cidade, estado, CEP"
+                            placeholder="Rua, número, bairro, complemento, cidade, estado"
                             {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="zipCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CEP</FormLabel>
+                        <FormControl>
+                          <Input
+                            id="zipCode"
+                            placeholder="00000-000"
+                            {...field}
+                            onChange={(e) => {
+                              const formatted = formatCEP(e.target.value);
+                              field.onChange(formatted);
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
@@ -712,91 +892,27 @@ export default function SubscriptionCheckoutPage() {
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="cardName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nome no Cartão</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="Nome como está no cartão"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="cardNumber"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Número do Cartão</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="0000 0000 0000 0000"
-                                {...field}
-                                value={formatCardNumber(field.value)}
-                                onChange={(e) => {
-                                  field.onChange(
-                                    formatCardNumber(e.target.value)
-                                  );
-                                }}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <FormField
-                        control={form.control}
-                        name="cardExpiry"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Data de Validade</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="MM/AA"
-                                {...field}
-                                value={formatExpiryDate(field.value)}
-                                onChange={(e) => {
-                                  field.onChange(
-                                    formatExpiryDate(e.target.value)
-                                  );
-                                }}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="cardCvc"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>CVC</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="123"
-                                {...field}
-                                value={formatCVC(field.value)}
-                                onChange={(e) => {
-                                  field.onChange(formatCVC(e.target.value));
-                                }}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                    {/* Componente Stripe Card Element */}
+                    <div className="p-4 border rounded-md">
+                      <FormLabel className="mb-2 block">
+                        Cartão de Crédito
+                      </FormLabel>
+                      <CardElement
+                        options={{
+                          style: {
+                            base: {
+                              fontSize: "16px",
+                              color: "#424770",
+                              "::placeholder": {
+                                color: "#aab7c4",
+                              },
+                            },
+                            invalid: {
+                              color: "#9e2146",
+                            },
+                          },
+                          hidePostalCode: true,
+                        }}
                       />
                     </div>
 
@@ -832,7 +948,7 @@ export default function SubscriptionCheckoutPage() {
                 <Button
                   type="submit"
                   className="w-full py-6 text-lg bg-green-600 hover:bg-green-700"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !stripe}
                 >
                   {isSubmitting ? (
                     <>
@@ -990,5 +1106,14 @@ export default function SubscriptionCheckoutPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrapper com o provedor do Stripe
+export default function SubscriptionCheckoutPage() {
+  return (
+    <Elements stripe={stripePromise}>
+      <CheckoutForm />
+    </Elements>
   );
 }

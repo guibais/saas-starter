@@ -277,7 +277,7 @@ export default function DashboardLayout({
                 </div>
               </div>
             )}
-            <div>
+            {/* <div>
               <h3 className="mb-2 px-4 text-lg font-semibold tracking-tight">
                 Dashboard
               </h3>
@@ -298,7 +298,7 @@ export default function DashboardLayout({
                   </Link>
                 ))}
               </div>
-            </div>
+            </div> */}
             <div className="border-t border-gray-200 pt-4 mt-auto">
               <Link
                 href="/api/auth/logout"

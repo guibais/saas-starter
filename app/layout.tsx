@@ -1,55 +1,19 @@
 import "./globals.css";
-import type { Metadata, Viewport } from "next";
-import { Manrope } from "next/font/google";
+import { Inter } from "next/font/google";
 import { UserProvider } from "@/lib/auth";
 import { getUser } from "@/lib/db/queries";
 import { AuthProvider } from "@/lib/state/AuthProvider";
 import { Toaster } from "@/components/ui/toaster";
+import { constructMetadata } from "./metadata";
+import { SkipToContent } from "@/components/skip-to-content";
 
-export const metadata: Metadata = {
-  title: "Tudo Fresco - Frutas Gourmet",
-  description:
-    "Plataforma de assinatura de frutas gourmet e compras individuais.",
-  keywords: [
-    "Frutas",
-    "Assinatura",
-    "Hortifruti",
-    "Gourmet",
-    "Frutas Exóticas",
-    "Delivery",
-    "Frutas Frescas",
-    "Tudo Fresco",
-  ],
-  authors: [
-    {
-      name: "Tudo Fresco",
-      url: "https://tudofresco.com.br",
-    },
-  ],
-  creator: "Tudo Fresco",
-  openGraph: {
-    type: "website",
-    locale: "pt_BR",
-    url: "https://tudofresco.com.br",
-    title: "Tudo Fresco - Frutas Gourmet",
-    description:
-      "Plataforma de assinatura de frutas gourmet e compras individuais.",
-    siteName: "Tudo Fresco",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Tudo Fresco - Frutas Gourmet",
-    description:
-      "Plataforma de assinatura de frutas gourmet e compras individuais.",
-    creator: "@tudofresco",
-  },
-};
+const inter = Inter({ subsets: ["latin"] });
 
-export const viewport: Viewport = {
+export const metadata = constructMetadata();
+
+export const viewport = {
   maximumScale: 1,
 };
-
-const manrope = Manrope({ subsets: ["latin"] });
 
 export default function RootLayout({
   children,
@@ -59,14 +23,14 @@ export default function RootLayout({
   let userPromise = getUser();
 
   return (
-    <html
-      lang="pt-BR"
-      className={`bg-white dark:bg-gray-950 text-black dark:text-white ${manrope.className}`}
-    >
+    <html lang="pt-BR" suppressHydrationWarning className={inter.className}>
       <body className="min-h-[100dvh] bg-gray-50">
+        <SkipToContent />
         <UserProvider userPromise={userPromise}>
           <AuthProvider>
-            {children}
+            <main id="main-content" tabIndex={-1}>
+              {children}
+            </main>
             <Toaster />
           </AuthProvider>
         </UserProvider>

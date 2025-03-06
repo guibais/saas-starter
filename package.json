@@ -44,6 +44,7 @@
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.4",
     "drizzle-orm": "^0.39.1",
+    "framer-motion": "^12.4.10",
     "jose": "^5.9.6",
     "jotai": "^2.12.1",
     "js-cookie": "^3.0.5",

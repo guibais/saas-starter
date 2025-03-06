@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { db } from "@/lib/db";
 import {
   userSubscriptions,
@@ -14,25 +13,113 @@ import {
 } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { authOptions } from "@/lib/auth";
 import { stripe } from "@/lib/payments/stripe";
 import bcrypt from "bcryptjs";
+import { verifyToken } from "@/lib/auth/session";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const body = await req.json();
+    // Verificar autenticação usando o cookie de sessão
+    const cookieStore = await cookies();
+    const customerSession = cookieStore.get("customer_session");
+    let session = null;
 
-    const {
-      planId,
-      customizableItems,
-      userDetails,
-      paymentDetails,
-      createAccount,
-      paymentIntentId,
-    } = body;
+    if (customerSession?.value) {
+      try {
+        session = await verifyToken(customerSession.value);
+      } catch (error) {
+        console.error("Erro ao verificar token:", error);
+      }
+    }
 
-    // Verificar se o plano existe
+    const data = await req.json();
+    console.log("Dados recebidos:", {
+      planId: data.planId,
+      hasPaymentIntentId: !!data.paymentIntentId,
+      createAccount: data.createAccount,
+      isAuthenticated: !!session,
+    });
+
+    // Verificar se os dados necessários foram fornecidos
+    if (!data.planId) {
+      return NextResponse.json(
+        { error: "ID do plano não fornecido" },
+        { status: 400 }
+      );
+    }
+
+    if (!data.paymentIntentId) {
+      return NextResponse.json(
+        { error: "Payment Intent ID não fornecido" },
+        { status: 400 }
+      );
+    }
+
+    // Verificar o status do Payment Intent no Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      data.paymentIntentId
+    );
+
+    if (paymentIntent.status !== "succeeded") {
+      return NextResponse.json(
+        { error: `Pagamento não finalizado. Status: ${paymentIntent.status}` },
+        { status: 400 }
+      );
+    }
+
+    // Obter ou criar cliente
+    let customerId: number;
+
+    if (session?.user?.id) {
+      // Cliente já autenticado
+      customerId = session.user.id;
+      console.log("Cliente já autenticado:", customerId);
+    } else if (data.createAccount && data.userDetails) {
+      // Verificar se já existe um cliente com o mesmo email
+      const existingCustomer = await db.query.customers.findFirst({
+        where: eq(customers.email, data.userDetails.email),
+      });
+
+      if (existingCustomer) {
+        return NextResponse.json(
+          { error: "Email já cadastrado. Por favor, faça login." },
+          { status: 400 }
+        );
+      }
+
+      // Criar novo cliente
+      console.log("Criando novo cliente...");
+      const hashedPassword = await bcrypt.hash(data.userDetails.password, 10);
+      const customerResult = await db
+        .insert(customers)
+        .values({
+          name: data.userDetails.name,
+          email: data.userDetails.email,
+          passwordHash: hashedPassword,
+          phone: data.userDetails.phone,
+          address: data.userDetails.address,
+          deliveryInstructions: data.userDetails.deliveryInstructions,
+        })
+        .returning({ id: customers.id });
+
+      if (!customerResult || customerResult.length === 0) {
+        throw new Error("Falha ao criar nova conta de cliente");
+      }
+
+      customerId = customerResult[0].id;
+      console.log("Novo cliente criado:", customerId);
+    } else {
+      return NextResponse.json(
+        {
+          error:
+            "Usuário não autenticado e dados para criar conta não fornecidos",
+        },
+        { status: 401 }
+      );
+    }
+
+    // Buscar plano
+    const planId = data.planId;
     const plan = await db.query.subscriptionPlans.findFirst({
       where: eq(subscriptionPlans.id, planId),
     });
@@ -44,177 +131,200 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let userId = session?.user?.id;
-
-    // Se não há sessão e precisamos criar uma conta
-    if (!userId && createAccount) {
-      // Verificar se o email já existe
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.email, userDetails.email),
-      });
-
-      if (existingUser) {
-        return NextResponse.json(
-          { error: "Email já cadastrado. Faça login para continuar." },
-          { status: 400 }
-        );
-      }
-
-      // Criar hash da senha
-      const hashedPassword = await bcrypt.hash(userDetails.password, 10);
-
-      // Criar novo usuário
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          name: userDetails.name,
-          email: userDetails.email,
-          hashedPassword,
-          phone: userDetails.phone,
-          address: userDetails.address,
-          role: "customer",
-        })
-        .returning();
-
-      userId = newUser.id;
-    } else if (!userId) {
-      return NextResponse.json(
-        { error: "Usuário não autenticado" },
-        { status: 401 }
-      );
-    }
-
-    // Verificar se o usuário já tem uma assinatura ativa para este plano
-    const existingSubscription = await db.query.userSubscriptions.findFirst({
-      where: (userSub, { and, eq }) =>
-        and(
-          eq(userSub.userId, userId),
-          eq(userSub.planId, planId),
-          eq(userSub.status, "active")
-        ),
+    // Buscar itens fixos do plano separadamente
+    const fixedItemsQuery = await db.query.planFixedItems.findMany({
+      where: eq(planFixedItems.planId, planId),
+      with: {
+        product: true,
+      },
     });
 
-    if (existingSubscription) {
-      return NextResponse.json(
-        { error: "Você já possui uma assinatura ativa para este plano" },
-        { status: 400 }
-      );
-    }
+    console.log(
+      `Plano ${plan.name} encontrado com ${fixedItemsQuery.length} itens fixos`
+    );
 
-    // Se temos um ID de Payment Intent, verificamos seu status
-    if (paymentIntentId) {
-      const paymentIntent = await stripe.paymentIntents.retrieve(
-        paymentIntentId
-      );
+    // Salvar método de pagamento se solicitado
+    if (data.paymentDetails.savePaymentMethod) {
+      try {
+        console.log("Salvando método de pagamento...");
 
-      if (
-        paymentIntent.status !== "succeeded" &&
-        paymentIntent.status !== "requires_capture"
-      ) {
-        return NextResponse.json(
-          { error: "Pagamento não foi concluído" },
-          { status: 400 }
-        );
+        // Verificar se temos dados do cartão nas charges
+        let lastFour = "0000";
+        let cardBrand = "";
+        let expMonth = 12;
+        let expYear = 30;
+
+        if (
+          paymentIntent.latest_charge &&
+          typeof paymentIntent.latest_charge === "string"
+        ) {
+          try {
+            const charge = await stripe.charges.retrieve(
+              paymentIntent.latest_charge
+            );
+            if (charge.payment_method_details?.card) {
+              const card = charge.payment_method_details.card;
+              lastFour = card.last4 || "0000";
+              cardBrand = card.brand || "";
+              expMonth = card.exp_month || 12;
+              expYear = card.exp_year || 30;
+            }
+          } catch (error) {
+            console.error("Erro ao buscar detalhes da charge:", error);
+          }
+        }
+
+        await db.insert(paymentMethods).values({
+          userId: customerId,
+          type: "card",
+          lastFourDigits: lastFour,
+          expiryDate: `${expMonth}/${expYear}`,
+          holderName: data.userDetails.name,
+          isDefault: true,
+        });
+
+        console.log("Método de pagamento salvo com sucesso");
+      } catch (error) {
+        console.error("Erro ao salvar método de pagamento:", error);
+        // Continuar mesmo com erro para não impedir a criação da assinatura
       }
     }
-
-    // Calcular próxima data de entrega (próxima segunda-feira)
-    const nextDeliveryDate = getNextMonday();
 
     // Criar assinatura
-    const [subscription] = await db
+    console.log("Criando assinatura...");
+
+    // Próxima data de entrega (próxima segunda-feira)
+    const nextDeliveryDate = getNextMonday();
+
+    // Usar a API correta do Drizzle ORM para criar assinatura
+    const newSubscription = {
+      customerId: customerId,
+      planId: planId,
+      status: "active",
+      startDate: new Date().toISOString(),
+      nextDeliveryDate: nextDeliveryDate.toISOString(),
+      stripeSubscriptionId: null,
+      planName: plan.name,
+    };
+
+    console.log(
+      "Tentando criar assinatura com:",
+      JSON.stringify(newSubscription)
+    );
+
+    // Criar registro de assinatura
+    const subscriptionResult = await db
       .insert(userSubscriptions)
-      .values({
-        userId,
-        planId,
-        status: "active",
-        startDate: new Date(),
-        nextDeliveryDate,
-        stripeSubscriptionId: null, // Será atualizado quando criarmos no Stripe
-        planName: plan.name,
-      })
-      .returning();
+      .values(newSubscription)
+      .returning({ id: userSubscriptions.id });
 
-    // Salvar itens personalizados
-    if (customizableItems && customizableItems.length > 0) {
-      const itemValues = customizableItems.map((item) => ({
-        subscriptionId: subscription.id,
-        productId: item.product.id,
-        quantity: item.quantity,
-      }));
+    const subscriptionId = subscriptionResult[0].id;
+    console.log("Assinatura criada com ID:", subscriptionId);
 
-      await db.insert(subscriptionItems).values(itemValues);
+    // Já temos os itens fixos do plano
+    console.log(
+      `Encontrados ${fixedItemsQuery.length} itens fixos para o plano ID ${planId}`
+    );
+
+    // Adicionar itens fixos da assinatura
+    if (fixedItemsQuery && fixedItemsQuery.length > 0) {
+      for (const item of fixedItemsQuery) {
+        console.log(
+          `Adicionando item fixo: ${item.productId}, quantidade: ${item.quantity}`
+        );
+        try {
+          // Usar SQL bruto para contornar problemas de tipo
+          await db.execute(sql`
+            INSERT INTO subscription_items 
+            (subscription_id, product_id, quantity, created_at, updated_at) 
+            VALUES 
+            (${subscriptionId}, ${item.productId}, ${
+            item.quantity
+          }, ${new Date().toISOString()}, ${new Date().toISOString()})
+          `);
+        } catch (error) {
+          console.error("Erro ao inserir item fixo:", error);
+        }
+      }
     }
 
-    // Se o usuário optou por salvar o método de pagamento, vamos criar um customer no Stripe
-    if (paymentDetails.savePaymentMethod && paymentIntentId) {
-      // Recuperar o customer existente ou criar um novo
-      let customer;
-      const user = await db.query.users.findFirst({
-        where: eq(users.id, userId),
-      });
-
-      if (user && user.stripeCustomerId) {
-        // Usuário já tem um customer ID, vamos usá-lo
-        customer = await stripe.customers.retrieve(user.stripeCustomerId);
-      } else {
-        // Criar um novo customer
-        customer = await stripe.customers.create({
-          name: userDetails.name,
-          email: userDetails.email,
-          phone: userDetails.phone,
-          address: {
-            line1: userDetails.address,
-          },
-          metadata: {
-            userId,
-          },
-        });
-
-        // Atualizar o customer ID no usuário
-        await db
-          .update(users)
-          .set({ stripeCustomerId: customer.id })
-          .where(eq(users.id, userId));
+    // Adicionar itens personalizados
+    if (data.customizableItems && data.customizableItems.length > 0) {
+      for (const item of data.customizableItems) {
+        if (item.quantity > 0) {
+          console.log(
+            `Adicionando item personalizado: ${item.product.id}, quantidade: ${item.quantity}`
+          );
+          try {
+            // Usar SQL bruto para contornar problemas de tipo
+            await db.execute(sql`
+              INSERT INTO subscription_items 
+              (subscription_id, product_id, quantity, created_at, updated_at) 
+              VALUES 
+              (${subscriptionId}, ${item.product.id}, ${
+              item.quantity
+            }, ${new Date().toISOString()}, ${new Date().toISOString()})
+            `);
+          } catch (error) {
+            console.error("Erro ao inserir item personalizado:", error);
+          }
+        }
       }
+    }
 
-      // Atualizar o Payment Intent para associá-lo ao customer
-      if (customer) {
-        await stripe.paymentIntents.update(paymentIntentId, {
-          customer: customer.id,
-          setup_future_usage: "off_session",
-        });
-      }
+    // Registrar pagamento
+    console.log("Registrando pagamento...");
+    const totalAmount =
+      parseFloat(plan.price) +
+      (data.customizableItems?.reduce((total: number, item: any) => {
+        return total + parseFloat(item.product.price) * item.quantity;
+      }, 0) || 0);
+
+    // Nota: Na definição, o schema tem paymentDate obrigatório mas está ausente no código
+    await db.insert(payments).values({
+      userId: customerId,
+      amount: totalAmount.toString(),
+      status: "completed",
+      paymentDate: new Date(),
+      currency: "BRL",
+      subscriptionId: subscriptionId,
+    });
+
+    console.log("Pagamento registrado com sucesso");
+
+    // Se o cliente for recém-criado, fazer login automático
+    if (data.createAccount) {
+      // Criar token JWT para o cliente
+      // Isso seria implementado com sua lógica de autenticação
+      console.log("Cliente registrado, fazer login automático...");
     }
 
     return NextResponse.json({
       success: true,
-      subscriptionId: subscription.id,
       message: "Assinatura criada com sucesso",
+      subscriptionId,
     });
   } catch (error) {
     console.error("Erro ao processar pagamento:", error);
     return NextResponse.json(
-      { error: "Erro ao processar o pagamento" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao processar o pagamento",
+      },
       { status: 500 }
     );
   }
 }
 
-// Função auxiliar para calcular a próxima segunda-feira
 function getNextMonday(): Date {
-  const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = domingo, 1 = segunda, ...
+  const date = new Date();
+  const day = date.getDay();
+  const diff = day === 0 ? 1 : 8 - day; // Se for domingo (0), próxima segunda é amanhã
 
-  // Calcular quantos dias faltam para a próxima segunda-feira
-  const daysUntilMonday = dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
 
-  // Se hoje é segunda-feira, retornamos a próxima semana
-  const nextMonday = new Date(today);
-  nextMonday.setDate(today.getDate() + daysUntilMonday);
-
-  // Resetar para o início do dia
-  nextMonday.setHours(8, 0, 0, 0);
-
-  return nextMonday;
+  return date;
 }

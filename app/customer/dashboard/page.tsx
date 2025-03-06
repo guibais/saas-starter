@@ -20,6 +20,23 @@ import { getCustomerUser } from "@/lib/customer/utils";
 import { cookies } from "next/headers";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import Image from "next/image";
+import { Badge } from "@/components/ui/badge";
+
+// Interfaces
+interface SubscriptionItem {
+  id: number;
+  subscriptionId: number;
+  productId: number;
+  quantity: number;
+  product: {
+    id: number;
+    name: string;
+    imageUrl: string | null;
+    productType: string;
+    price: string;
+  };
+}
 
 // Function to get customer subscription
 async function getCustomerSubscription(customerId: number) {
@@ -72,6 +89,32 @@ async function getCustomerOrders(customerId: number) {
   }
 }
 
+// Função para buscar detalhes dos produtos da assinatura
+async function getSubscriptionItems(subscriptionId: number) {
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/subscriptions/${subscriptionId}/items`,
+      {
+        cache: "no-store",
+        headers: {
+          Cookie: cookies().toString(),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Error fetching subscription items: ${response.statusText}`
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching subscription items:", error);
+    return { items: [] };
+  }
+}
+
 // Format date helper
 function formatDate(dateString: string | null) {
   if (!dateString) return "N/A";
@@ -92,6 +135,11 @@ export default async function CustomerDashboardPage() {
 
   const subscription = await getCustomerSubscription(user.id);
   const { orders = [] } = await getCustomerOrders(user.id);
+
+  // Buscar itens da assinatura se o usuário tiver uma assinatura ativa
+  const subscriptionItems = subscription
+    ? await getSubscriptionItems(subscription.id)
+    : { items: [] };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -174,19 +222,27 @@ export default async function CustomerDashboardPage() {
                       <div className="flex items-center">
                         <div
                           className={`w-3 h-3 rounded-full mr-2 ${
-                            subscription.status === "ACTIVE"
+                            subscription.status.toLowerCase() === "active"
                               ? "bg-green-500"
-                              : subscription.status === "PAUSED"
+                              : subscription.status.toLowerCase() === "paused"
                               ? "bg-yellow-500"
                               : "bg-red-500"
                           }`}
                         ></div>
-                        <span>
-                          {subscription.status === "ACTIVE"
+                        <span
+                          className={`${
+                            subscription.status.toLowerCase() === "active"
+                              ? "text-green-600"
+                              : subscription.status.toLowerCase() === "paused"
+                              ? "text-yellow-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {subscription.status.toLowerCase() === "active"
                             ? "Ativa"
-                            : subscription.status === "PAUSED"
+                            : subscription.status.toLowerCase() === "paused"
                             ? "Pausada"
-                            : subscription.status === "CANCELLED"
+                            : subscription.status.toLowerCase() === "cancelled"
                             ? "Cancelada"
                             : subscription.status}
                         </span>
@@ -222,6 +278,16 @@ export default async function CustomerDashboardPage() {
                 <CardContent>
                   {subscription ? (
                     <>
+                      {subscription.plan?.imageUrl && (
+                        <div className="relative h-32 w-full mb-3 rounded-md overflow-hidden">
+                          <Image
+                            src={subscription.plan.imageUrl}
+                            alt={subscription.planName || "Plano"}
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
+                      )}
                       <p className="font-medium">{subscription.planName}</p>
                       <p className="text-sm text-gray-500 mt-2">
                         R$ {parseFloat(subscription.price).toFixed(2)}/mês
@@ -253,6 +319,52 @@ export default async function CustomerDashboardPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {subscription &&
+              subscriptionItems.items &&
+              subscriptionItems.items.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium mb-4">Suas Frutas</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                    {subscriptionItems.items.map((item: SubscriptionItem) => (
+                      <div
+                        key={item.id}
+                        className="border rounded-md overflow-hidden"
+                      >
+                        {item.product?.imageUrl ? (
+                          <div className="relative h-24 w-full">
+                            <Image
+                              src={item.product.imageUrl}
+                              alt={item.product.name}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-24 w-full bg-gray-100 flex items-center justify-center">
+                            <Package className="h-6 w-6 text-gray-400" />
+                          </div>
+                        )}
+                        <div className="p-2">
+                          <p className="font-medium text-sm">
+                            {item.product.name}
+                          </p>
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-xs text-gray-500">
+                              Qtd: {item.quantity}
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              {item.product.productType === "normal"
+                                ? "Normal"
+                                : "Exótica"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
             <div className="mt-6">
               <h3 className="text-lg font-medium mb-4">Últimas Entregas</h3>

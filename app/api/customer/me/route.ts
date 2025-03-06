@@ -12,9 +12,7 @@ export async function GET() {
     const customerSession = cookieStore.get("customer_session");
 
     if (!customerSession?.value) {
-      return NextResponse.json({
-        authenticated: false,
-      });
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
     try {
@@ -22,9 +20,7 @@ export async function GET() {
       const session = await verifyToken(customerSession.value);
 
       if (!session || !session.user?.id) {
-        return NextResponse.json({
-          authenticated: false,
-        });
+        return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
       }
 
       // Buscar dados do cliente
@@ -33,33 +29,29 @@ export async function GET() {
       });
 
       if (!customer) {
-        return NextResponse.json({
-          authenticated: false,
-        });
+        return NextResponse.json(
+          { error: "Cliente não encontrado" },
+          { status: 404 }
+        );
       }
 
-      // Retornar o status de autenticação e os dados do usuário
+      // Retornar os dados do usuário
       return NextResponse.json({
-        authenticated: true,
-        user: {
-          id: customer.id,
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone,
-          address: customer.address,
-          deliveryInstructions: customer.deliveryInstructions,
-        },
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+        deliveryInstructions: customer.deliveryInstructions,
       });
     } catch (error) {
       console.error("Erro ao verificar token:", error);
-      return NextResponse.json({
-        authenticated: false,
-      });
+      return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
     }
   } catch (error) {
-    console.error("Erro ao verificar autenticação:", error);
+    console.error("Erro ao buscar dados do cliente:", error);
     return NextResponse.json(
-      { error: "Erro ao verificar autenticação" },
+      { error: "Erro ao buscar dados do cliente" },
       { status: 500 }
     );
   }
