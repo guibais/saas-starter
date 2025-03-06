@@ -115,7 +115,7 @@ export async function setSession(user: User) {
     value: token,
     httpOnly: true,
     path: "/",
-    secure: process.env.NODE_ENV === "production",
+    // secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24, // 1 day in seconds
     sameSite: "lax",
     priority: "high",

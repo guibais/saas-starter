@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       expires,
       path: "/",
       sameSite: "lax",
-      secure: isProd,
+      // secure: isProd,
       priority: "high",
     };
 

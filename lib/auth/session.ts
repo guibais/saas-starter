@@ -203,7 +203,7 @@ export async function setSession(user: User) {
     httpOnly: true,
     path: "/",
     // Garantir configurações específicas para produção
-    secure: isProd,
+    // secure: isProd,
     sameSite: "lax",
     // Use domain apenas em produção, se necessário
     ...(isProd && process.env.COOKIE_DOMAIN
