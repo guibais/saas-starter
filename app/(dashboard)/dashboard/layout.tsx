@@ -205,12 +205,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-xl font-bold">Tudo Fresco</span>
           </Link>
           <div className="ml-auto flex items-center space-x-4">
-            <Link
-              href="/dashboard/settings"
-              className="text-sm font-medium transition-colors hover:text-primary"
-            >
-              Configurações
-            </Link>
             <Link href="/api/auth/logout">
               <Button
                 variant="ghost"
