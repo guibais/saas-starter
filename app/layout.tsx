@@ -11,6 +11,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = constructMetadata();
 
+export const dynamic = "force-dynamic";
+
 export const viewport = {
   maximumScale: 1,
 };
