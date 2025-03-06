@@ -125,7 +125,7 @@ export async function signOut() {
   await logActivity(userWithTeam?.teamId, user.id, ActivityType.SIGN_OUT);
 
   const cookieStore = await cookies();
-  cookieStore.delete("session");
+  cookieStore.delete("admin_session");
 
   // Use a URL absoluta baseada na variável de ambiente ou fallback para caminho relativo
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
@@ -220,7 +220,7 @@ export const deleteAccount = validatedActionWithUser(
     }
 
     const cookieStore = await cookies();
-    cookieStore.delete("session");
+    cookieStore.delete("admin_session");
 
     redirect("/sign-in");
   }

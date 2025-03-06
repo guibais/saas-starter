@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Garantir que quaisquer cookies antigos sejam removidos
-    response.cookies.delete("session");
+    response.cookies.delete("admin_session");
 
     // Verificar se já existia um cookie de cliente
     const customerSessionCookie = request.cookies.get("customer_session");
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     // Definir cookie de sessão na resposta com configurações corretas
     console.log("[AdminLogin] Definindo cookie de sessão");
     response.cookies.set({
-      name: "session",
+      name: "admin_session",
       value: token,
       httpOnly: true,
       expires,
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
 
     // Verificar se o cookie foi realmente definido
     const wasSet = JSON.stringify(response.cookies.getAll()).includes(
-      '"name":"session"'
+      '"name":"admin_session"'
     );
     console.log(
       `[AdminLogin] Verificação: Cookie definido? ${wasSet ? "Sim" : "Não"}`

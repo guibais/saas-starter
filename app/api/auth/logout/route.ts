@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar qual cookie está sendo usado
-    const sessionCookie = request.cookies.get("session");
+    const sessionCookie = request.cookies.get("admin_session");
 
     // Criar resposta
     const response = NextResponse.json({ success: true });
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       // Limpar apenas o cookie de sessão do admin/staff
       console.log("[Auth/Logout] Removendo cookie 'session'");
       response.cookies.set({
-        name: "session",
+        name: "admin_session",
         value: "",
         expires: new Date(0), // Data no passado para expirar imediatamente
         path: "/",
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
 
     // Verificar qual cookie está sendo usado
-    const sessionCookie = request.cookies.get("session");
+    const sessionCookie = request.cookies.get("admin_session");
 
     // Criar resposta de redirecionamento para a página inicial
     const response = NextResponse.redirect(`${baseUrl}/`);
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
       // Limpar apenas o cookie de sessão do admin/staff
       console.log("[Auth/Logout] Removendo cookie 'session'");
       response.cookies.set({
-        name: "session",
+        name: "admin_session",
         value: "",
         expires: new Date(0), // Data no passado para expirar imediatamente
         path: "/",

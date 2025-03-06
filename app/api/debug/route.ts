@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
         name: cookie.name,
         value: "***", // Ocultar valores por segurança
       })),
-      hasSessionCookie: cookieStore.has("session"),
+      hasSessionCookie: cookieStore.has("admin_session"),
       hasCustomerSessionCookie: cookieStore.has("customer_session"),
       adminSessionValid: adminSession !== null,
       customerSessionValid: customerSession !== null,

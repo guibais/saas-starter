@@ -13,7 +13,7 @@ export async function getSession() {
     console.log("[getSession] Obtendo cookie de sessão");
     // Get the session cookie from request headers
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session");
+    const sessionCookie = cookieStore.get("admin_session");
 
     if (!sessionCookie) {
       console.log("[getSession] Cookie de sessão não encontrado");
@@ -111,7 +111,7 @@ export async function setSession(user: User) {
   // Set the session cookie
   const cookieStore = await cookies();
   cookieStore.set({
-    name: "session",
+    name: "admin_session",
     value: token,
     httpOnly: true,
     path: "/",

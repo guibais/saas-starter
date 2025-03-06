@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     // Definir cookie de sessão na resposta
     response.cookies.set({
-      name: "session",
+      name: "admin_session",
       value: token,
       httpOnly: true,
       expires,

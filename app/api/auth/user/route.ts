@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Primeiro, tentar obter a sessão normal (admin/staff)
-    const sessionCookie = request.cookies.get("session");
+    const sessionCookie = request.cookies.get("admin_session");
 
     if (sessionCookie) {
       console.log(

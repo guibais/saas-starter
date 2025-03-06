@@ -15,7 +15,7 @@ export async function getUserFromRequest(request: Request) {
 
     // Parse the cookie string to find the session cookie
     const cookies = parseCookies(cookieHeader);
-    const sessionCookie = cookies["session"];
+    const sessionCookie = cookies["admin_session"];
 
     if (!sessionCookie) return null;
 

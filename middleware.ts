@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
   const referer = request.headers.get("referer");
   log(`[Middleware] Referer: ${referer || "Nenhum"}`);
 
-  const sessionCookie = request.cookies.get("session");
+  const sessionCookie = request.cookies.get("admin_session");
   const customerSessionCookie = request.cookies.get("customer_session");
 
   log(`[Middleware] Cookies encontrados:`, {
@@ -96,7 +96,7 @@ export async function middleware(request: NextRequest) {
         log(
           `[Middleware] Sessão inválida ou expirada. Removendo cookie e redirecionando.`
         );
-        res.cookies.delete("session");
+        res.cookies.delete("admin_session");
         if (isProtectedRoute) {
           return NextResponse.redirect(new URL("/sign-in", request.url));
         }
@@ -139,7 +139,7 @@ export async function middleware(request: NextRequest) {
         const newToken = await signToken(updatedSession);
 
         res.cookies.set({
-          name: "session",
+          name: "admin_session",
           value: newToken,
           httpOnly: true,
           expires: expiresInOneDay,

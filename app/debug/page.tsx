@@ -74,7 +74,7 @@ export default function DebugPage() {
                       {debugInfo.cookies.map((cookie: any, index: number) => (
                         <li key={index}>
                           {cookie.name}{" "}
-                          {cookie.name === "session" &&
+                          {cookie.name === "admin_session" &&
                           debugInfo.hasSessionCookie
                             ? "(presente)"
                             : ""}
