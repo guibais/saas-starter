@@ -12,8 +12,8 @@ export default async function AdminLayout({
 }) {
   console.log("[AdminLayout] Iniciando verificação de autenticação");
 
-  // Verificar autenticação diretamente no layout
-  const user = await getServerUser();
+  // Verificar autenticação diretamente no layout, passando o parâmetro isAdminRoute=true
+  const user = await getServerUser(true);
 
   console.log(
     "[AdminLayout] Resultado da verificação:",

@@ -3,17 +3,32 @@ import { redirect } from "next/navigation";
 import { getCustomerUser } from "@/lib/customer/utils";
 import { CustomerHeader } from "@/components/dashboard/customer-header";
 
+// Layout customer deve ser dinâmico para evitar erros de autenticação
+export const dynamic = "force-dynamic";
+
 export default async function CustomerDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  console.log(
+    "[CustomerDashboardLayout] Iniciando verificação de autenticação"
+  );
+
+  // Verificar autenticação do cliente usando a função específica para clientes
   const user = await getCustomerUser();
 
-  // Redirect to login if user is not authenticated
+  // Verificar se o usuário é um cliente
   if (!user) {
+    console.log(
+      "[CustomerDashboardLayout] Usuário não autenticado como cliente"
+    );
     redirect("/customer/login");
   }
+
+  console.log(
+    `[CustomerDashboardLayout] Usuário cliente ${user.id} autenticado com sucesso`
+  );
 
   return (
     <div className="flex min-h-[100dvh] flex-col">

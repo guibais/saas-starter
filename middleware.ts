@@ -31,6 +31,26 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute = pathname.startsWith(adminRoutes);
   const isCustomerDashboardRoute = pathname.startsWith(customerDashboardRoutes);
 
+  // Se é rota administrativa, dar prioridade ao cookie session
+  if (isAdminRoute && sessionCookie) {
+    try {
+      log(`[Middleware] Rota admin - verificando token de sessão admin`);
+      const session = await verifyToken(sessionCookie.value);
+
+      if (!session || !session.user || session.user.role !== "admin") {
+        log(`[Middleware] Token de admin inválido ou usuário não é admin`);
+        return NextResponse.redirect(new URL("/sign-in", request.url));
+      }
+
+      log(`[Middleware] Acesso admin autorizado para: ${session.user.id}`);
+      // Admin tem acesso, continuar com a resposta normal
+      return NextResponse.next();
+    } catch (error) {
+      log(`[Middleware] Erro ao verificar sessão admin: ${error}`);
+      return NextResponse.redirect(new URL("/sign-in", request.url));
+    }
+  }
+
   // Redirect to sign-in if trying to access protected routes without a session
   if (isProtectedRoute && !sessionCookie) {
     log(
@@ -132,8 +152,9 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Handle customer session
-  if (customerSessionCookie) {
+  // Agora, somente gerencie o customer_session se não for uma rota admin
+  // Isso evita colisões entre as sessões em rotas administrativas
+  if (customerSessionCookie && !isAdminRoute) {
     try {
       log(`[Middleware] Verificando token de sessão de cliente`);
       const session = await verifyToken(customerSessionCookie.value);

@@ -1,37 +1,68 @@
-import { cookies } from "next/headers";
-import { cache } from "react";
+import { getCustomerSession } from "@/lib/auth/server-session";
+import { db } from "@/lib/db";
+import { customers } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
-// Function to get the customer user
-export const getCustomerUser = cache(async () => {
+// Define tipo Customer com isCustomer
+export type CustomerWithAuth = {
+  id: number;
+  name: string | null;
+  email: string;
+  role: string;
+  address: string | null;
+  phone: string | null;
+  deliveryInstructions: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+  isCustomer: boolean;
+  // Outras propriedades específicas do cliente
+  stripeCustomerId?: string | null;
+};
+
+// Função para obter o cliente autenticado
+export async function getCustomerUser(): Promise<CustomerWithAuth | null> {
   try {
-    // URL absoluta para evitar problemas de resolução
-    const apiUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/customer/user`
-      : `http://localhost:3000/api/customer/user`;
+    console.log("[getCustomerUser] Verificando sessão de cliente");
 
-    console.log(`[Utils] Buscando informações do usuário`);
-    console.log(`[Utils] URL da API: ${apiUrl}`);
+    const customerSession = await getCustomerSession();
 
-    const response = await fetch(apiUrl, {
-      cache: "no-store",
-      headers: {
-        Cookie: cookies().toString(),
-      },
-      next: { revalidate: 0 },
-    });
-
-    console.log(`[Utils] Status da resposta do usuário: ${response.status}`);
-
-    if (!response.ok) {
-      console.error(`[Utils] Erro ao buscar usuário: ${response.statusText}`);
+    if (!customerSession || !customerSession.user || !customerSession.user.id) {
+      console.log("[getCustomerUser] Sessão de cliente não encontrada");
       return null;
     }
 
-    const userData = await response.json();
-    console.log(`[Utils] Usuário encontrado com ID: ${userData.id}`);
-    return userData;
+    const customerId = customerSession.user.id;
+    console.log(
+      `[getCustomerUser] Sessão de cliente encontrada para ID: ${customerId}`
+    );
+
+    // Buscar cliente no banco de dados
+    const customer = await db.query.customers.findFirst({
+      where: eq(customers.id, customerId),
+    });
+
+    if (!customer) {
+      console.log(
+        `[getCustomerUser] Cliente ID ${customerId} não encontrado no banco de dados`
+      );
+      return null;
+    }
+
+    console.log(
+      `[getCustomerUser] Cliente encontrado: ${customer.name || customer.email}`
+    );
+
+    // Converter para o tipo CustomerWithAuth
+    const customerWithAuth: CustomerWithAuth = {
+      ...customer,
+      role: "customer",
+      isCustomer: true,
+    };
+
+    return customerWithAuth;
   } catch (error) {
-    console.error("[Utils] Erro ao obter usuário cliente:", error);
+    console.error("[getCustomerUser] Erro ao obter cliente:", error);
     return null;
   }
-});
+}

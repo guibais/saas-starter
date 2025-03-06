@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { users, customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyToken, signToken } from "@/lib/auth/session";
 import type { User } from "@/lib/db/schema";
@@ -118,6 +118,7 @@ export async function setSession(user: User) {
     secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24, // 1 day in seconds
     sameSite: "lax",
+    priority: "high",
   });
 
   console.log(`[setSession] Sessão criada com sucesso para usuário ${user.id}`);
@@ -125,33 +126,67 @@ export async function setSession(user: User) {
 }
 
 // Função para obter o usuário atual do servidor
-export async function getServerUser() {
+export async function getServerUser(isAdminRoute: boolean = false) {
   try {
-    console.log("[getServerUser] Obtendo usuário atual do servidor");
+    console.log("[getServerUser] Verificando se há usuário autenticado");
+
+    // Primeiro, tentar obter usuário admin/staff pela sessão normal
     const session = await getSession();
 
-    if (!session || !session.user || !session.user.id) {
-      console.log("[getServerUser] Sessão não encontrada ou inválida");
-      return null;
+    if (session && session.user && session.user.id) {
+      console.log(
+        `[getServerUser] Sessão admin/staff encontrada para ID: ${session.user.id}`
+      );
+
+      // Get the user from the database
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, session.user.id),
+      });
+
+      if (user) {
+        console.log(
+          `[getServerUser] Resultado da busca: Usuário encontrado: ${user.name}`
+        );
+        return user;
+      } else {
+        console.log("[getServerUser] Usuário não encontrado no banco de dados");
+      }
     }
 
-    console.log(
-      `[getServerUser] Sessão válida encontrada, buscando usuário ID: ${session.user.id}`
-    );
-    // Get the user from the database
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, session.user.id),
-    });
+    // Se não é rota de admin e não encontrou sessão normal ou não encontrou usuário,
+    // tentar sessão de cliente
+    if (!isAdminRoute) {
+      const customerSession = await getCustomerSession();
 
-    if (!user) {
-      console.log("[getServerUser] Usuário não encontrado no banco de dados");
-      return null;
+      if (customerSession && customerSession.user && customerSession.user.id) {
+        console.log(
+          `[getServerUser] Sessão de cliente encontrada para ID: ${customerSession.user.id}`
+        );
+
+        // Get the customer from the database
+        const customer = await db.query.customers.findFirst({
+          where: eq(customers.id, customerSession.user.id),
+        });
+
+        if (customer) {
+          console.log(`[getServerUser] Cliente encontrado: ${customer.name}`);
+          // Note: dependendo de como o sistema espera os dados, pode ser necessário
+          // adaptar o objeto customer para ter a mesma estrutura que user
+          return {
+            ...customer,
+            role: "customer",
+            isCustomer: true,
+          };
+        } else {
+          console.log(
+            "[getServerUser] Cliente não encontrado no banco de dados"
+          );
+        }
+      }
     }
 
-    console.log(
-      `[getServerUser] Resultado da busca: Usuário encontrado: ${user.name}`
-    );
-    return user;
+    console.log("[getServerUser] Nenhuma sessão válida encontrada");
+    return null;
   } catch (error) {
     console.error("[getServerUser] Erro ao obter usuário:", error);
     return null;
