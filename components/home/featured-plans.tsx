@@ -47,9 +47,9 @@ export function FeaturedPlans({ plans }: FeaturedPlansProps) {
                 <div className="h-6 w-3/4 bg-gray-200 animate-pulse mb-2"></div>
                 <div className="h-4 w-full bg-gray-200 animate-pulse mb-2"></div>
                 <div className="h-4 w-2/3 bg-gray-200 animate-pulse mb-4"></div>
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col gap-4">
                   <div className="h-8 w-1/3 bg-gray-200 animate-pulse"></div>
-                  <div className="h-10 w-1/4 bg-gray-200 animate-pulse"></div>
+                  <div className="h-10 w-full bg-gray-200 animate-pulse"></div>
                 </div>
               </div>
             </motion.div>
@@ -58,7 +58,7 @@ export function FeaturedPlans({ plans }: FeaturedPlansProps) {
           plans.map((plan: Plan, index) => (
             <motion.div
               key={plan.id}
-              className="overflow-hidden rounded-xl bg-white shadow-sm border border-green-100"
+              className="overflow-hidden rounded-xl bg-white shadow-sm border border-green-100 flex flex-col"
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -92,7 +92,7 @@ export function FeaturedPlans({ plans }: FeaturedPlansProps) {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 hover:opacity-100 transition-opacity" />
               </div>
-              <div className="p-6">
+              <div className="p-6 flex flex-col flex-grow">
                 <h3 className="text-xl font-bold mb-2 text-green-900">
                   {plan.name}
                 </h3>
@@ -100,7 +100,7 @@ export function FeaturedPlans({ plans }: FeaturedPlansProps) {
                   {plan.description ||
                     "Plano de assinatura de frutas frescas e selecionadas."}
                 </p>
-                <div className="flex justify-between items-center">
+                <div className="mt-auto flex flex-col gap-4">
                   <div>
                     <span className="text-2xl font-bold text-green-800">
                       {formatCurrency(plan.price)}
@@ -112,11 +112,12 @@ export function FeaturedPlans({ plans }: FeaturedPlansProps) {
                   <motion.div
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
+                    className="w-full"
                   >
                     <Button
                       asChild
                       variant="outline"
-                      className="border-green-800 text-green-800 hover:bg-green-50"
+                      className="border-green-800 text-green-800 hover:bg-green-50 w-full"
                     >
                       <Link href={`/plans/${plan.slug}`}>Ver Detalhes</Link>
                     </Button>
