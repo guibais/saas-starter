@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { signToken, verifyToken } from "@/lib/auth/session";
 
 const protectedRoutes = "/dashboard";
-const adminRoutes = "/dashboard/admin";
+const adminRoutes = "/dashboard";
 const customerDashboardRoutes = "/customer/dashboard";
 
 // Função para habilitar logs de diagnóstico
