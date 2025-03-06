@@ -40,9 +40,12 @@ export async function signToken(payload: SessionData) {
 
 export async function verifyToken(input: string) {
   try {
+    console.log("[verifyToken] Verificando token:", input);
     const { payload } = await jwtVerify(input, key);
+    console.log("[verifyToken] Token verificado com sucesso:", payload);
     return payload as SessionData;
   } catch (error) {
+    console.error("[verifyToken] Erro ao verificar token:", error);
     return null;
   }
 }
