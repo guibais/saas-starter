@@ -35,12 +35,34 @@ export async function getClientUser() {
 
 export async function logoutClient() {
   try {
+    console.log("[logoutClient] Iniciando logout no cliente");
     const response = await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",
     });
 
-    return response.ok;
+    console.log(`[logoutClient] Resposta do servidor: ${response.status}`);
+
+    // Verificar resposta
+    if (response.ok) {
+      console.log(
+        "[logoutClient] Logout bem-sucedido, limpando cookie localmente"
+      );
+
+      // Também tentar limpar o cookie no lado do cliente como backup
+      // Em alguns browsers isso pode falhar devido a restrições, mas é uma camada extra de segurança
+      document.cookie =
+        "admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+
+      console.log("[logoutClient] Processo de logout concluído");
+      return true;
+    } else {
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: "Erro desconhecido" }));
+      console.error("[logoutClient] Erro ao fazer logout:", errorData.message);
+      return false;
+    }
   } catch (error) {
     console.error("[logoutClient] Erro ao fazer logout:", error);
     return false;

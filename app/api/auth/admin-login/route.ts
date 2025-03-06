@@ -99,17 +99,32 @@ export async function POST(request: NextRequest) {
 
     // Definir cookie de sessão na resposta com configurações corretas
     console.log("[AdminLogin] Definindo cookie de sessão");
-    response.cookies.set({
+    const isProd = process.env.NODE_ENV === "production";
+    console.log(
+      `[AdminLogin] Ambiente: ${isProd ? "Produção" : "Desenvolvimento"}`
+    );
+
+    // Configurações adicionais para ambiente de produção
+    let cookieConfig: any = {
       name: "admin_session",
       value: token,
       httpOnly: true,
       expires,
       path: "/",
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      // Garantir que o cookie não seja removido por redirecionamentos subsequentes
+      secure: isProd,
       priority: "high",
-    });
+    };
+
+    // Em produção, adicionar configurações extras se necessário
+    if (isProd && process.env.COOKIE_DOMAIN) {
+      console.log(
+        `[AdminLogin] Adicionando domínio: ${process.env.COOKIE_DOMAIN}`
+      );
+      cookieConfig.domain = process.env.COOKIE_DOMAIN;
+    }
+
+    response.cookies.set(cookieConfig);
 
     // Verificar se o cookie foi realmente definido
     const wasSet = JSON.stringify(response.cookies.getAll()).includes(

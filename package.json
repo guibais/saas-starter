@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "NODE_ENV=production && next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "db:seed": "npx tsx lib/db/seed.ts",

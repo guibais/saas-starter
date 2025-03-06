@@ -178,24 +178,45 @@ export async function getUser() {
 }
 
 export async function setSession(user: User) {
-  const session: SessionData = {
+  console.log(`[setSession] Criando sessão para usuário ${user.id}`);
+
+  const session = {
     user: { id: user.id, role: user.role },
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 1 day from now
   };
 
   const token = await signToken(session);
 
-  // Set the session cookie
+  // Verificar qual ambiente estamos
+  const isProd = process.env.NODE_ENV === "production";
+  console.log(
+    `[setSession] Ambiente detectado: ${
+      isProd ? "Produção" : "Desenvolvimento"
+    }`
+  );
+
+  // Set the session cookie with production-safe settings
   const cookieStore = await cookies();
   cookieStore.set({
     name: "admin_session",
     value: token,
     httpOnly: true,
     path: "/",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: 60 * 60 * 24, // 1 day in seconds
+    // Garantir configurações específicas para produção
+    secure: isProd,
     sameSite: "lax",
+    // Use domain apenas em produção, se necessário
+    ...(isProd && process.env.COOKIE_DOMAIN
+      ? { domain: process.env.COOKIE_DOMAIN }
+      : {}),
+    maxAge: 60 * 60 * 24, // 1 day in seconds
+    priority: "high",
   });
 
+  console.log(
+    `[setSession] Cookie "admin_session" definido para ${
+      user.id
+    } com configurações para ${isProd ? "produção" : "desenvolvimento"}`
+  );
   return session;
 }

@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { signToken, verifyToken } from "@/lib/auth/session";
 
 const protectedRoutes = "/dashboard";
-const adminRoutes = "/dashboard";
+const adminRoutes = "/dashboard/admin";
 const customerDashboardRoutes = "/customer/dashboard";
 
 // Função para habilitar logs de diagnóstico
@@ -23,11 +23,12 @@ export async function middleware(request: NextRequest) {
   const referer = request.headers.get("referer");
   log(`[Middleware] Referer: ${referer || "Nenhum"}`);
 
-  const sessionCookie = request.cookies.get("admin_session");
+  // Verificar os cookies corretos
+  const adminSessionCookie = request.cookies.get("admin_session");
   const customerSessionCookie = request.cookies.get("customer_session");
 
   log(`[Middleware] Cookies encontrados:`, {
-    session: sessionCookie ? "presente" : "ausente",
+    admin_session: adminSessionCookie ? "presente" : "ausente",
     customer_session: customerSessionCookie ? "presente" : "ausente",
   });
 
@@ -48,11 +49,11 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Se é rota administrativa, dar prioridade ao cookie session
-  if (isAdminRoute && sessionCookie) {
+  // Se é rota administrativa, dar prioridade ao cookie admin_session
+  if (isAdminRoute && adminSessionCookie) {
     try {
       log(`[Middleware] Rota admin - verificando token de sessão admin`);
-      const session = await verifyToken(sessionCookie.value);
+      const session = await verifyToken(adminSessionCookie.value);
 
       if (!session || !session.user || session.user.role !== "admin") {
         log(`[Middleware] Token de admin inválido ou usuário não é admin`);
@@ -69,7 +70,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect to sign-in if trying to access protected routes without a session
-  if (isProtectedRoute && !sessionCookie) {
+  if (isProtectedRoute && !adminSessionCookie) {
     log(
       `[Middleware] Tentativa de acesso a rota protegida sem sessão. Redirecionando para login.`
     );
@@ -86,17 +87,35 @@ export async function middleware(request: NextRequest) {
 
   let res = NextResponse.next();
 
-  if (sessionCookie) {
+  if (adminSessionCookie) {
     try {
       log(`[Middleware] Verificando token de sessão admin/staff`);
-      const session = await verifyToken(sessionCookie.value);
+      const session = await verifyToken(adminSessionCookie.value);
 
       // If session is invalid or expired, clear it and redirect if on protected route
       if (!session) {
         log(
           `[Middleware] Sessão inválida ou expirada. Removendo cookie e redirecionando.`
         );
-        res.cookies.delete("admin_session");
+
+        // Use as configurações corretas para remover o cookie
+        const isProd = process.env.NODE_ENV === "production";
+        const cookieOptions: any = {
+          name: "admin_session",
+          value: "",
+          expires: new Date(0),
+          path: "/",
+          sameSite: "lax",
+          secure: isProd,
+        };
+
+        // Em produção, adicionar domain se configurado
+        if (isProd && process.env.COOKIE_DOMAIN) {
+          cookieOptions.domain = process.env.COOKIE_DOMAIN;
+        }
+
+        res.cookies.set(cookieOptions);
+
         if (isProtectedRoute) {
           return NextResponse.redirect(new URL("/sign-in", request.url));
         }
@@ -138,16 +157,25 @@ export async function middleware(request: NextRequest) {
 
         const newToken = await signToken(updatedSession);
 
-        res.cookies.set({
+        // Configurações para renovar o cookie
+        const isProd = process.env.NODE_ENV === "production";
+        const cookieOptions: any = {
           name: "admin_session",
           value: newToken,
           httpOnly: true,
           expires: expiresInOneDay,
           path: "/",
           sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
+          secure: isProd,
           priority: "high",
-        });
+        };
+
+        // Em produção, adicionar domain se configurado
+        if (isProd && process.env.COOKIE_DOMAIN) {
+          cookieOptions.domain = process.env.COOKIE_DOMAIN;
+        }
+
+        res.cookies.set(cookieOptions);
 
         log(
           `[Middleware] Sessão renovada com sucesso. Nova expiração: ${expiresInOneDay.toISOString()}`

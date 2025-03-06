@@ -125,7 +125,32 @@ export async function signOut() {
   await logActivity(userWithTeam?.teamId, user.id, ActivityType.SIGN_OUT);
 
   const cookieStore = await cookies();
-  cookieStore.delete("admin_session");
+
+  // Configurações para remover o cookie
+  const isProd = process.env.NODE_ENV === "production";
+  console.log(`[signOut] Ambiente: ${isProd ? "Produção" : "Desenvolvimento"}`);
+
+  // Configuração para remoção do cookie
+  let cookieOptions: any = {
+    name: "admin_session",
+    value: "",
+    expires: new Date(0),
+    path: "/",
+    sameSite: "lax",
+    secure: isProd,
+  };
+
+  // Em produção, adicionar domain se configurado
+  if (isProd && process.env.COOKIE_DOMAIN) {
+    console.log(
+      `[signOut] Adicionando domínio para remoção: ${process.env.COOKIE_DOMAIN}`
+    );
+    cookieOptions.domain = process.env.COOKIE_DOMAIN;
+  }
+
+  // Remover o cookie
+  cookieStore.set(cookieOptions);
+  console.log("[signOut] Cookie 'admin_session' removido");
 
   // Use a URL absoluta baseada na variável de ambiente ou fallback para caminho relativo
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "";
