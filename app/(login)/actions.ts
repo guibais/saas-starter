@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import {
   User,
   users,
@@ -24,7 +24,8 @@ import {
   validatedAction,
   validatedActionWithUser,
 } from "@/lib/auth/middleware";
-import { ADMIN_COOKIE_NAME, clearSessionCookie } from "@/lib/auth/cookie-utils";
+import { ADMIN_COOKIE_NAME } from "@/lib/auth/cookie-utils";
+import { clearAdminSessionCookie } from "@/lib/auth/server-cookie-utils";
 
 async function logActivity(
   teamId: number | null | undefined,
@@ -126,10 +127,8 @@ export async function signOut() {
   const userWithTeam = await getUserWithTeam(user.id);
   await logActivity(userWithTeam?.teamId, user.id, ActivityType.SIGN_OUT);
 
-  const cookieStore = await cookies();
-
-  // Limpar o cookie de sessão usando a função utilitária
-  clearSessionCookie(cookieStore, ADMIN_COOKIE_NAME);
+  // Limpar o cookie de sessão usando a função utilitária do servidor
+  await clearAdminSessionCookie();
 
   redirect("/sign-in");
 }

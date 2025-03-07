@@ -4,13 +4,10 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { users, customers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { verifyToken, signToken } from "@/lib/auth/session";
-import type { User } from "@/lib/db/schema";
-import {
-  ADMIN_COOKIE_NAME,
-  CUSTOMER_COOKIE_NAME,
-  setSessionCookie,
-} from "./cookie-utils";
+import { verifyToken, signToken } from "./session";
+import { User } from "@/lib/db/schema";
+import { ADMIN_COOKIE_NAME, CUSTOMER_COOKIE_NAME } from "./cookie-utils";
+import { setAdminSessionCookie } from "./server-cookie-utils";
 
 // Função para obter a sessão do usuário
 export async function getSession() {
@@ -113,9 +110,8 @@ export async function setSession(user: User) {
   const token = await signToken(session);
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day from now
 
-  // Set the session cookie using the utility function
-  const cookieStore = await cookies();
-  setSessionCookie(cookieStore, ADMIN_COOKIE_NAME, token, expires);
+  // Set the session cookie using the server utility function
+  await setAdminSessionCookie(token, expires);
 
   console.log(`[setSession] Sessão criada com sucesso para usuário ${user.id}`);
   return session;
