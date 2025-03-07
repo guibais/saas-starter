@@ -310,7 +310,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col">
           <main className="flex-1 p-4 md:p-6">
             <Breadcrumb />
-            {children}
+            ola
           </main>
         </div>
       </div>
