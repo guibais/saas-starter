@@ -310,7 +310,7 @@ export default function DashboardLayout({
               </div>
             </div> */}
             <div className="border-t border-gray-200 pt-4 mt-auto">
-              {/* <Button
+              <Button
                 variant="ghost"
                 size="sm"
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:text-red-800 transition-all"
@@ -318,7 +318,7 @@ export default function DashboardLayout({
               >
                 <LogOut className="h-4 w-4" />
                 Sair da conta
-              </Button> */}
+              </Button>
             </div>
           </nav>
         </div>

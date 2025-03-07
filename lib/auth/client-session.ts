@@ -1,10 +1,7 @@
 "use client";
 
 import { User } from "@/lib/db/schema";
-import {
-  ADMIN_COOKIE_NAME,
-  getClientCookieClearingScript,
-} from "./cookie-utils";
+import { ADMIN_COOKIE_NAME, clearClientCookie } from "./client-cookie-utils";
 
 // Funções de sessão específicas para o cliente
 export async function getClientUser() {
@@ -55,15 +52,13 @@ export async function logoutClient() {
       );
 
       // Também tentar limpar o cookie no lado do cliente como backup
-      document.cookie = getClientCookieClearingScript(ADMIN_COOKIE_NAME);
+      clearClientCookie(ADMIN_COOKIE_NAME);
 
       console.log("[logoutClient] Processo de logout concluído");
       return true;
     } else {
-      const errorData = await response
-        .json()
-        .catch(() => ({ message: "Erro desconhecido" }));
-      console.error("[logoutClient] Erro ao fazer logout:", errorData.message);
+      const errorData = await response.json();
+      console.error("[logoutClient] Erro no logout:", errorData);
       return false;
     }
   } catch (error) {

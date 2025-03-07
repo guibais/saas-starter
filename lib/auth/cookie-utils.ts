@@ -1,3 +1,5 @@
+"use server";
+
 import { cookies } from "next/headers";
 import { ResponseCookies } from "next/dist/compiled/@edge-runtime/cookies";
 import { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
@@ -116,17 +118,4 @@ export function clearSessionCookieInResponse(
     ...getBaseCookieConfig(isProd),
     ...getDomainConfig(isProd),
   });
-}
-
-// Get client-side cookie clearing script
-export function getClientCookieClearingScript(name: string) {
-  const isProd = process.env.NODE_ENV === "production";
-  const domainPart =
-    isProd && process.env.NEXT_PUBLIC_COOKIE_DOMAIN
-      ? `; Domain=${process.env.NEXT_PUBLIC_COOKIE_DOMAIN}`
-      : "";
-
-  return `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT${domainPart}; SameSite=Strict; ${
-    isProd ? "Secure" : ""
-  }`;
 }
