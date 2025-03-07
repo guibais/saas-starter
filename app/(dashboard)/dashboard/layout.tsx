@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Package,
@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CircleIcon } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { logoutClient } from "@/lib/auth/client-session";
 
 // Forçar renderização dinâmica em todas as páginas do dashboard
 export const dynamic = "force-dynamic";
@@ -89,13 +90,26 @@ function Breadcrumb() {
   );
 }
 
-export default function Layout({ children }: { children: React.ReactNode }) {
-  console.log("[DashboardLayout] Iniciando carregamento do layout");
-
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Fechar a sidebar quando o caminho mudar em dispositivos móveis
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await logoutClient();
+      router.push("/sign-in");
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
+  };
+
+  // Fechar a sidebar quando mudar de página
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
@@ -205,16 +219,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-xl font-bold">Tudo Fresco</span>
           </Link>
           <div className="ml-auto flex items-center space-x-4">
-            <Link href="/api/auth/logout">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-700 hover:text-gray-900"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sair
-              </Button>
-            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-700 hover:text-gray-900"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair
+            </Button>
           </div>
         </div>
       </div>
@@ -297,13 +310,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
             </div> */}
             <div className="border-t border-gray-200 pt-4 mt-auto">
-              {/* <Link
-                href="/api/auth/logout"
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:text-red-800 transition-all"
+              {/* <Button
+                variant="ghost"
+                size="sm"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:text-red-800 transition-all"
+                onClick={handleLogout}
               >
                 <LogOut className="h-4 w-4" />
                 Sair da conta
-              </Link> */}
+              </Button> */}
             </div>
           </nav>
         </div>
