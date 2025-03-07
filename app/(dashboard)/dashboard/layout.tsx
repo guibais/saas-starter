@@ -27,7 +27,7 @@ import { CircleIcon } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
 // Forçar renderização dinâmica em todas as páginas do dashboard
-// export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic";
 
 // Componente de Breadcrumb
 function Breadcrumb() {
@@ -256,7 +256,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   Administração
                 </h3>
                 <div className="space-y-1">
-                  {adminLinks.map((link) => (
+                  {/* {adminLinks.map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}
@@ -270,7 +270,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <link.icon className="h-4 w-4" />
                       {link.title}
                     </Link>
-                  ))}
+                  ))} */}
                 </div>
               </div>
             )}
