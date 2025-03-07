@@ -26,69 +26,6 @@ import { Button } from "@/components/ui/button";
 import { CircleIcon } from "lucide-react";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
-// Forçar renderização dinâmica em todas as páginas do dashboard
-export const dynamic = "force-dynamic";
-
-// Componente de Breadcrumb
-function Breadcrumb() {
-  const pathname = usePathname();
-  const segments = pathname.split("/").filter(Boolean);
-
-  // Mapeamento de segmentos para nomes mais amigáveis
-  const segmentNames: Record<string, string> = {
-    dashboard: "Dashboard",
-    admin: "Admin",
-    products: "Produtos",
-    plans: "Planos",
-    inventory: "Estoque",
-    orders: "Pedidos",
-    users: "Usuários",
-    subscriptions: "Assinaturas",
-    general: "Geral",
-    activity: "Atividade",
-    security: "Segurança",
-  };
-
-  // Se estiver na raiz do dashboard, não mostrar breadcrumb
-  if (pathname === "/dashboard") {
-    return null;
-  }
-
-  return (
-    <nav className="flex items-center text-sm text-gray-500 mb-4 overflow-x-auto pb-2">
-      <Link href="/dashboard" className="hover:text-gray-900 whitespace-nowrap">
-        Dashboard
-      </Link>
-      {segments.slice(1).map((segment, index) => {
-        // Ignorar segmentos numéricos (IDs)
-        if (!isNaN(Number(segment))) {
-          return null;
-        }
-
-        // Construir o href para o segmento atual
-        const href = `/${segments.slice(0, index + 2).join("/")}`;
-        const isLast = index === segments.slice(1).length - 1;
-
-        // Verificar se estamos na seção admin e aplicar estilos/links especiais
-        const linkText = segmentNames[segment] || segment;
-
-        return (
-          <div key={segment} className="flex items-center whitespace-nowrap">
-            <ChevronRight className="h-4 w-4 mx-1 flex-shrink-0" />
-            {isLast ? (
-              <span className="font-medium text-gray-900">{linkText}</span>
-            ) : (
-              <Link href={href} className="hover:text-gray-900">
-                {linkText}
-              </Link>
-            )}
-          </div>
-        );
-      })}
-    </nav>
-  );
-}
-
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
