@@ -108,10 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         <div className="flex flex-1 flex-col">
-          <main className="flex-1 p-4 md:p-6">
-            <Breadcrumb />
-            {children}
-          </main>
+          <main className="flex-1 p-4 md:p-6">{children}</main>
         </div>
       </div>
     </div>
