@@ -205,7 +205,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-xl font-bold">Tudo Fresco</span>
           </Link>
           <div className="ml-auto flex items-center space-x-4">
-            {/* <Link href="/api/auth/logout">
+            <Link href="/api/auth/logout">
               <Button
                 variant="ghost"
                 size="sm"
@@ -214,7 +214,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <LogOut className="h-4 w-4 mr-2" />
                 Sair
               </Button>
-            </Link> */}
+            </Link>
           </div>
         </div>
       </div>
